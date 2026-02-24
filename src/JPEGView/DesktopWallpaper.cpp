@@ -4,6 +4,7 @@
 #include "SaveImage.h"
 #include "MultiMonitorSupport.h"
 #include "SettingsProvider.h"
+#include <versionhelpers.h>
 
 namespace SetDesktopWallpaper {
 
@@ -35,13 +36,21 @@ namespace SetDesktopWallpaper {
 		int windowsVersion = Helpers::GetWindowsVersion();
 		LPCTSTR wallpaperStyle = _T("0");
 		LPCTSTR tileWallpaper = _T("0");
-		if (windowsVersion >= 601) {
+
+		if (IsWindows7OrGreater()) {
 			// Check if image spans all screens
 			CRect allScreens = CMultiMonitorSupport::GetVirtualDesktop();
 			bitmapMatchesDesktop = (allScreens.Size() == CSize(image.DIBWidth(), image.DIBHeight()));
-			if (bitmapMatchesDesktop && windowsVersion >= 602) wallpaperStyle = _T("22"); // for Windows 8 ff
-			if (bitmapMatchesDesktop && windowsVersion == 601) tileWallpaper = _T("1"); // for Windows 7
+			if (bitmapMatchesDesktop) {
+				if (IsWindows8OrGreater()) {
+					wallpaperStyle = _T("22"); // for Windows 8 ff
+				}
+				else {
+					tileWallpaper = _T("1"); // for Windows 7
+				}
+			}
 		}
+
 		SetRegistryStringValue(_T("WallpaperStyle"), wallpaperStyle);
 		SetRegistryStringValue(_T("TileWallpaper"), tileWallpaper);
 

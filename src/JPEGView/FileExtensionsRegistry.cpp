@@ -4,7 +4,7 @@
 #include "SettingsProvider.h"
 #include "NLS.h"
 #include "FileList.h"
-
+#include <versionhelpers.h>
 #include <memory>
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -464,8 +464,8 @@ CFileExtensionsRegistry::CFileExtensionsRegistry() {
 	int version = Helpers::GetWindowsVersion();
 	// Starting with Windows Vista, the Windows Explorer uses a different location
 	// to register file extensions
-	m_bNewRegistryFormat = version >= 600;
-	m_bIsWindows8 = version >= 602;
+	m_bNewRegistryFormat = IsWindowsVistaOrGreater();
+	m_bIsWindows8 = IsWindows8OrGreater();
 	m_bIsJPEGViewRegistered = IsRegistered();
 }
 
@@ -594,13 +594,13 @@ void CFileExtensionsRegistrationWindows8::LaunchApplicationAssociationDialog() {
 
 	IApplicationAssociationRegistrationUI_ *applicationAssociationRegistrationUI = NULL;
 
-	::CoCreateInstance(CLSID_ApplicationAssociationRegistrationUI_,
+	HRESULT hRes = ::CoCreateInstance(CLSID_ApplicationAssociationRegistrationUI_,
 		NULL,
 		CLSCTX_INPROC_SERVER,
 		__uuidof(IApplicationAssociationRegistrationUI_),
 		(LPVOID*)&applicationAssociationRegistrationUI);
 
-	if (applicationAssociationRegistrationUI) {
+	if (hRes == S_OK && applicationAssociationRegistrationUI) {
 		applicationAssociationRegistrationUI->AddRef();
 		applicationAssociationRegistrationUI->LaunchAdvancedAssociationUI(L"JPEGView");
 		applicationAssociationRegistrationUI->Release();
