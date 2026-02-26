@@ -544,7 +544,7 @@ CParameterDB::DBBlock* CParameterDB::LoadFromFile(const CString& sParamDBName, b
 	}
 
 	// file exists, open it
-	HANDLE hFile = ::CreateFile(sParamDBName, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	HANDLE hFile = ::CreateFile(sParamDBName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		HandleErrorAndCloseHandle(errorOpenFailed, sParamDBName, 0);
 		return NULL;
