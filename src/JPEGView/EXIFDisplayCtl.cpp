@@ -8,6 +8,10 @@
 #include "SettingsProvider.h"
 #include "HelpersGUI.h"
 #include "NLS.h"
+#include "EXIFHelpers.h"
+
+#undef SHOW_FILENAME
+#define SHOW_COMPACT
 
 static int GetFileNameHeight(HDC dc) {
 	CSize size;
@@ -102,8 +106,12 @@ void CEXIFDisplayCtl::FillEXIFDataDisplay() {
 	m_pEXIFDisplay->SetHistogram(NULL);
 
 	CString sPrefix, sFileTitle;
-	LPCTSTR sCurrentFileName = m_pMainDlg->CurrentFileName(true);
 	const CFileList* pFileList = m_pMainDlg->GetFileList();
+
+#ifdef SHOW_FILENAME
+	// show filename and file index (if option "Show Filename" is enabled this is duplicate info)
+	LPCTSTR sCurrentFileName = m_pMainDlg->CurrentFileName(true);
+
 	if (CurrentImage()->IsClipboardImage()) {
 		sPrefix = sCurrentFileName;
 	} else if (pFileList->Current() != NULL) {
@@ -111,37 +119,99 @@ void CEXIFDisplayCtl::FillEXIFDataDisplay() {
 		sFileTitle = sCurrentFileName;
 		sFileTitle += Helpers::GetMultiframeIndex(m_pMainDlg->GetCurrentImage());
 	}
+#endif
+
 	LPCTSTR sComment = NULL;
 	m_pEXIFDisplay->AddPrefix(sPrefix);
 	m_pEXIFDisplay->AddTitle(sFileTitle);
+
+#ifndef SHOW_COMPACT
 	m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Image width:")), CurrentImage()->OrigWidth());
 	m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Image height:")), CurrentImage()->OrigHeight());
+#endif
+
 	if (!CurrentImage()->IsClipboardImage()) {
 		CEXIFReader* pEXIFReader = CurrentImage()->GetEXIFReader();
 		CRawMetadata* pRawMetaData = CurrentImage()->GetRawMetadata();
 		if (pEXIFReader != NULL) {
 			sComment = pEXIFReader->GetUserComment();
-			if (sComment == NULL || sComment[0] == 0 || ((std::wstring) sComment).find_first_not_of(L" \t\n\r\f\v", 0) == std::wstring::npos) {
+			if (sComment == NULL || sComment[0] == 0 || ((std::wstring)sComment).find_first_not_of(L" \t\n\r\f\v", 0) == std::wstring::npos) {
 				sComment = pEXIFReader->GetImageDescription();
 			}
+
+#ifdef SHOW_COMPACT
+			// display date taken (if missing display last modified time)
 			if (pEXIFReader->GetAcquisitionTimePresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Acquisition date:")), pEXIFReader->GetAcquisitionTime());
-			} else if (pEXIFReader->GetDateTimePresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Exif Date Time:")), pEXIFReader->GetDateTime());
-			} else {
+				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), pEXIFReader->GetAcquisitionTime());
+			}
+			else {
 				const FILETIME* pFileTime = pFileList->CurrentModificationTime();
 				if (pFileTime != NULL) {
-					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Modification date:")), *pFileTime);
+					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), *pFileTime);
 				}
 			}
+
+			// show exposure time, aperture, ISO speed, exposure bias, focal length, 35mm focal length equivalent and 
+			// flash indication in one line
+			CString sExposureTime = pEXIFReader->GetExposureTimePresent()
+				? m_pEXIFDisplay->FormatNumber(pEXIFReader->GetExposureTime()) : _T("");
+
+			CString sFNumber = (pEXIFReader->GetFNumberPresent())
+				? m_pEXIFDisplay->FormatNumber(pEXIFReader->GetFNumber(), 1) : _T("");
+
+			CString sISOSpeed = pEXIFReader->GetISOSpeedPresent()
+				? m_pEXIFDisplay->FormatNumber(pEXIFReader->GetISOSpeed()) : _T("");
+
+			CString sFocalLength = pEXIFReader->GetFocalLengthPresent()
+				? m_pEXIFDisplay->FormatNumber(pEXIFReader->GetFocalLength()) : _T("");
+
+			double focalLengthEquiv = GetFocalLenghtEquiv(pEXIFReader);
+			CString sFocalLengthEquiv = focalLengthEquiv > 0.0
+				? _T("➞") + CString(m_pEXIFDisplay->FormatNumber(focalLengthEquiv)) : _T("");
+
+			double exposureBias = pEXIFReader->GetExposureBiasPresent()
+				? pEXIFReader->GetExposureBias() : 0.0;
+			CString sExposureBias = exposureBias != 0.0
+				? _T(" EV") + CString(m_pEXIFDisplay->FormatNumber(exposureBias, 1, true)) + _T(" •") : _T("");
+
+			CString sFlashFired = pEXIFReader->GetFlashFiredPresent() && pEXIFReader->GetFlashFired() ? _T("⚡") : _T("");
+
+			CString cameraInfoFormat = _T("%ss • f/%s • ISO %s •%s %s%smm %s");
+			m_pEXIFDisplay->AddLine(cameraInfoFormat, _T(""), sExposureTime, sFNumber, sISOSpeed, sExposureBias, sFocalLength, sFocalLengthEquiv, sFlashFired);
+
+			// display camera make and model
+			if (pEXIFReader->GetCameraModelPresent()) {
+				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), pEXIFReader->GetCameraModel());
+			}
+
+			// display lens info 
+			CString sLensInfo = pEXIFReader->GetLensInfo();
+			if (!sLensInfo.IsEmpty()) {
+				m_pEXIFDisplay->AddLine(_T(""), sLensInfo);
+			}
+
+			// display image size: widthx height and size in Megapixels
+			int width = CurrentImage()->OrigWidth();
+			int height = CurrentImage()->OrigHeight();
+			double megaPixels = (double)(width * height) / 1000000.0;
+
+			TCHAR* sWidth; TCHAR* sHeight; TCHAR* sMegaPixels;
+			sWidth = m_pEXIFDisplay->FormatNumber(width);
+			sHeight = m_pEXIFDisplay->FormatNumber(height);
+			sMegaPixels = m_pEXIFDisplay->FormatNumber(megaPixels, 1);
+			m_pEXIFDisplay->AddLine(_T("%sMP • %sx%s"), CNLS::GetString(_T("")), sMegaPixels, sWidth, sHeight);
+
 			if (pEXIFReader->IsGPSInformationPresent()) {
+				m_pEXIFDisplay->AddEmptyLine();
 				CString sGPSLocation = CreateGPSString(pEXIFReader->GetGPSLatitude(), pEXIFReader->GetGPSLongitude());
 				m_pEXIFDisplay->SetGPSLocation(sGPSLocation, CreateGPSURL(pEXIFReader->GetGPSLatitude(), pEXIFReader->GetGPSLongitude()));
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Location:")), sGPSLocation, true);
+				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), sGPSLocation, true);
 				if (pEXIFReader->IsGPSAltitudePresent()) {
-					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Altitude (m):")), pEXIFReader->GetGPSAltitude(), 0);
+					CString sAltitude = m_pEXIFDisplay->FormatNumber(pEXIFReader->GetGPSAltitude(), 0);
+					m_pEXIFDisplay->AddLine(_T("Alt: %sm"), CNLS::GetString(_T("")), sAltitude);
 				}
 			}
+#else
 			if (pEXIFReader->GetCameraModelPresent()) {
 				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Camera model:")), pEXIFReader->GetCameraModel());
 			}
@@ -166,8 +236,77 @@ void CEXIFDisplayCtl::FillEXIFDataDisplay() {
 			if (pEXIFReader->GetSoftwarePresent()) {
 				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Software:")), pEXIFReader->GetSoftware());
 			}
+
+			if (pEXIFReader->IsGPSInformationPresent()) {
+				CString sGPSLocation = CreateGPSString(pEXIFReader->GetGPSLatitude(), pEXIFReader->GetGPSLongitude());
+				m_pEXIFDisplay->SetGPSLocation(sGPSLocation, CreateGPSURL(pEXIFReader->GetGPSLatitude(), pEXIFReader->GetGPSLongitude()));
+				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Location:")), sGPSLocation, true);
+				if (pEXIFReader->IsGPSAltitudePresent()) {
+					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Altitude (m):")), pEXIFReader->GetGPSAltitude(), 0);
+				}
+			}
+#endif
 		}
 		else if (pRawMetaData != NULL) {
+#ifdef SHOW_COMPACT
+			// show exposure time, aperture, ISO speed, focal length, and flash indication in one line
+			double exposureTime = pRawMetaData->GetExposureTime();
+			Rational rational = (exposureTime < 1.0) 
+				? Rational(1, Helpers::RoundToInt(1.0 / exposureTime)) : Rational(Helpers::RoundToInt(exposureTime), 1);
+			CString sExposureTime = pRawMetaData->GetExposureTime() > 0.0
+				? m_pEXIFDisplay->FormatNumber(rational) : _T("");
+
+			CString sFNumber = pRawMetaData->GetAperture() > 0.0
+				? m_pEXIFDisplay->FormatNumber(pRawMetaData->GetAperture(), 1) : _T("");
+
+			CString sISOSpeed = pRawMetaData->GetIsoSpeed() > 0.0
+				? m_pEXIFDisplay->FormatNumber(pRawMetaData->GetIsoSpeed()) : _T("");
+
+			CString sFocalLength = pRawMetaData->GetFocalLength() > 0.0
+				? m_pEXIFDisplay->FormatNumber(pRawMetaData->GetFocalLength(), 1) : _T("");
+
+			CString sFlashFired = pRawMetaData->IsFlashFired() ? _T("⚡") : _T("");
+
+			CString cameraInfoFormat = _T("%ss • f/%s • ISO %s • %smm %s");
+			m_pEXIFDisplay->AddLine(cameraInfoFormat, _T(""), sExposureTime, sFNumber, sISOSpeed, sFocalLength, sFlashFired);
+
+			if (pRawMetaData->GetManufacturer()[0] != 0) {
+				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), CString(pRawMetaData->GetManufacturer()) + _T(" ") + pRawMetaData->GetModel());
+			}
+
+			// display date taken (if missing display last modified time)
+			if (pRawMetaData->GetAcquisitionTime().wYear > 1985) {
+				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), pRawMetaData->GetAcquisitionTime());
+			}
+			else {
+				const FILETIME* pFileTime = pFileList->CurrentModificationTime();
+				if (pFileTime != NULL) {
+					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), *pFileTime);
+				}
+			}
+
+			// display image size: widthx height and size in Megapixels
+			int width = pRawMetaData->GetWidth();
+			int height = pRawMetaData->GetHeight();
+			double megaPixels = (double)(width * height) / 1000000.0;
+
+			TCHAR* sWidth; TCHAR* sHeight; TCHAR* sMegaPixels;
+			sWidth = m_pEXIFDisplay->FormatNumber(width);
+			sHeight = m_pEXIFDisplay->FormatNumber(height);
+			sMegaPixels = m_pEXIFDisplay->FormatNumber(megaPixels, 1);
+			m_pEXIFDisplay->AddLine(_T("%sMP • %sx%s"), CNLS::GetString(_T("")), sMegaPixels, sWidth, sHeight);
+
+			if (pRawMetaData->IsGPSInformationPresent()) {
+				m_pEXIFDisplay->AddEmptyLine();
+				CString sGPSLocation = CreateGPSString(pRawMetaData->GetGPSLatitude(), pRawMetaData->GetGPSLongitude());
+				m_pEXIFDisplay->SetGPSLocation(sGPSLocation, CreateGPSURL(pRawMetaData->GetGPSLatitude(), pRawMetaData->GetGPSLongitude()));
+				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), sGPSLocation, true);
+				if (pRawMetaData->IsGPSAltitudePresent()) {
+					CString sAltitude = m_pEXIFDisplay->FormatNumber(pRawMetaData->GetGPSAltitude(), 0);
+					m_pEXIFDisplay->AddLine(_T("Alt: %sm"), CNLS::GetString(_T("")), sAltitude);
+				}
+			}
+#else
 			if (pRawMetaData->GetAcquisitionTime().wYear > 1985) {
 				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Acquisition date:")), pRawMetaData->GetAcquisitionTime());
 			}
@@ -205,6 +344,7 @@ void CEXIFDisplayCtl::FillEXIFDataDisplay() {
 			if (pRawMetaData->GetIsoSpeed() > 0.0) {
 				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("ISO Speed:")), (int)pRawMetaData->GetIsoSpeed());
 			}
+#endif
 		}
 		else {
 			const FILETIME* pFileTime = pFileList->CurrentModificationTime();
@@ -240,3 +380,17 @@ void CEXIFDisplayCtl::OnClose(void* pContext, int nParameter, CButtonCtrl & send
 	CEXIFDisplayCtl* pThis = (CEXIFDisplayCtl*)pContext;
 	pThis->m_pMainDlg->ExecuteCommand(IDM_SHOW_FILEINFO);
 }
+
+double CEXIFDisplayCtl::GetFocalLenghtEquiv(CEXIFReader* pEXIFReader) {
+	if (pEXIFReader->GetFocalLengthEquivalentPresent()) {
+		return (double)pEXIFReader->GetFocalLengthEquivalent();
+	}
+	else if (pEXIFReader->GetFocalLengthPresent()) {
+		// try to calculate using crop factor
+		return pEXIFReader->CalcFocalLengthEquiv(pEXIFReader->GetFocalLength());
+	}
+	else {
+		return 0.0;
+	}
+}
+

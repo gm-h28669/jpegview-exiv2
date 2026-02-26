@@ -3,6 +3,8 @@
 #include "EXIFReader.h"
 #include "Panel.h"
 
+#define LINE_BUF_SIZE 80
+
 class CHistogram;
 
 // Displays EXIF information on the screen (used when F2 is pressed)
@@ -31,6 +33,21 @@ public:
 	void AddLine(LPCTSTR sDescription, const SYSTEMTIME &time); // time is in local time
 	void AddLine(LPCTSTR sDescription, const FILETIME &time); // file time is in UTC
 	void AddLine(LPCTSTR sDescription, const Rational &number);
+	void AddEmptyLine();
+	void AddLine(LPCTSTR sFormat, LPCTSTR sDescription, int nValue1, int nValue2);
+	void AddLine(LPCTSTR sFormat, LPCTSTR sDescription, double nValue1, double nValue2);
+	
+	// LPCTSTR-only variadic (replaces 1-7 LPCTSTR overloads)
+	template<typename... Args>
+	void AddLine(LPCTSTR sFormat, LPCTSTR sDescription, Args... args) {
+		TCHAR buff[LINE_BUF_SIZE];
+		_stprintf_s(buff, LINE_BUF_SIZE, sFormat, args...);
+		AddLine(sDescription, buff, false);  
+	}
+
+	TCHAR* FormatNumber(const Rational& number);
+	TCHAR* FormatNumber(int number);
+	TCHAR* FormatNumber(double dValue, int nDigits = 0, bool showSign = false);
 
 	void SetPosition(CPoint pos) { m_pos = pos; RepositionAll(); }
 	virtual CRect PanelRect();
@@ -74,7 +91,7 @@ private:
 	TCHAR* m_sPrefix;
 	TCHAR* m_sTitle;
 	TCHAR* m_sComment;
-	int m_nCommentHeight; 
+	int m_nCommentHeight;
 	std::list<TextLine> m_lines;
 	const CHistogram* m_pHistogram;
 	bool m_titleIsSingleLine;

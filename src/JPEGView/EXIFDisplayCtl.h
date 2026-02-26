@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PanelController.h"
+#include "EXIFReader.h"
 
 class CEXIFDisplay;
 
@@ -33,4 +34,5 @@ private:
 	void FillEXIFDataDisplay();
 	static void OnShowHistogram(void* pContext, int nParameter, CButtonCtrl & sender);
 	static void OnClose(void* pContext, int nParameter, CButtonCtrl & sender);
+	static double GetFocalLenghtEquiv(CEXIFReader* pEXIFReader);
 };

@@ -43,6 +43,9 @@ CEXIFDisplay::CEXIFDisplay(HWND hWnd, INotifiyMouseCapture* pNotifyMouseCapture)
 	m_hTitleFont = 0;
 	m_nNoHistogramSize = CSize(0, 0);
 	m_pHistogram = NULL;
+	m_nPrefixLength = 0;
+	m_nTitleWidth = 0;
+	m_titleIsSingleLine = false;
 
 	AddUserPaintButton(ID_btnShowHideHistogram, &ShowHistogramTooltip, &PaintShowHistogramBtn, NULL, this, this);
 	AddUserPaintButton(ID_btnClose, CNLS::GetString(_T("Close")), &PaintCloseBtn, NULL, this, this);
@@ -105,21 +108,21 @@ void CEXIFDisplay::SetGPSLocation(LPCTSTR sLocation, LPCTSTR sURL) {
 	pLinkLocation->SetShow(true, false);
 }
 
+void CEXIFDisplay::AddEmptyLine() {
+	AddLine(_T(""), _T(""));
+}
 void CEXIFDisplay::AddLine(LPCTSTR sDescription, LPCTSTR sValue, bool valueIsURL) {
 	m_lines.push_back(TextLine(CopyStrAlloc(sDescription), CopyStrAlloc(sValue), valueIsURL));
 }
 
 void CEXIFDisplay::AddLine(LPCTSTR sDescription, double dValue, int nDigits) {
-	TCHAR buffFormat[8];
-	_stprintf_s(buffFormat, 8, _T("%%.%df"), nDigits);
-	TCHAR buff[32];
-	_stprintf_s(buff, 32, buffFormat, dValue);
+	TCHAR* buff = FormatNumber(dValue, nDigits);
 	AddLine(sDescription, buff);
 }
 
 void CEXIFDisplay::AddLine(LPCTSTR sDescription, int nValue){
-	TCHAR buff[32];
-	_stprintf_s(buff, 32, _T("%d"), nValue);
+	TCHAR buff[LINE_BUF_SIZE];
+	_stprintf_s(buff, LINE_BUF_SIZE, _T("%d"), nValue);
 	AddLine(sDescription, buff);
 }
 
@@ -137,22 +140,54 @@ void CEXIFDisplay::AddLine(LPCTSTR sDescription, const FILETIME &time) {
 	AddLine(sDescription, systemTime);
 }
 
-void CEXIFDisplay::AddLine(LPCTSTR sDescription, const Rational &number) {
+void CEXIFDisplay::AddLine(LPCTSTR sDescription, const Rational& number) {
+	TCHAR* buff = FormatNumber(number);
+	AddLine(sDescription, buff);
+}
+
+void CEXIFDisplay::AddLine(LPCTSTR sFormat, LPCTSTR sDescription, int nValue1, int nValue2) {
+	TCHAR buff[LINE_BUF_SIZE];
+	_stprintf_s(buff, LINE_BUF_SIZE, sFormat, nValue1, nValue2);
+	AddLine(sDescription, buff);
+}
+
+void CEXIFDisplay::AddLine(LPCTSTR sFormat, LPCTSTR sDescription, double nValue1, double nValue2) {
+	TCHAR buff[LINE_BUF_SIZE];
+	_stprintf_s(buff, LINE_BUF_SIZE, sFormat, nValue1, nValue2);
+	AddLine(sDescription, buff);
+}
+
+TCHAR* CEXIFDisplay::FormatNumber(const Rational& number) {
+	TCHAR* buff = new TCHAR[LINE_BUF_SIZE];
 	if (number.Denominator == 1) {
-		AddLine(sDescription, number.Numerator);
-	} else if (number.Numerator > 9) {
-		TCHAR buff[32];
-		if (number.Numerator * 3 < number.Denominator) {
-			_stprintf_s(buff, 32, _T("1/%d"), number.Denominator / number.Numerator);
-		} else {
-			_stprintf_s(buff, 32, _T("%.2f"), double(number.Numerator) / number.Denominator);
-		}
-		AddLine(sDescription, buff);
-	} else {
-		TCHAR buff[32];
-		_stprintf_s(buff, 32, _T("%d/%d"), number.Numerator, number.Denominator);
-		AddLine(sDescription, buff);
+		_stprintf_s(buff, LINE_BUF_SIZE, _T("%d"), number.Numerator);
 	}
+	else if (number.Numerator > 9) {
+		if (number.Numerator * 3 < number.Denominator) {
+			_stprintf_s(buff, LINE_BUF_SIZE, _T("1/%d"), number.Denominator / number.Numerator);
+		}
+		else {
+			_stprintf_s(buff, LINE_BUF_SIZE, _T("%.2f"), double(number.Numerator) / number.Denominator);
+		}
+	}
+	else {
+		_stprintf_s(buff, LINE_BUF_SIZE, _T("%d/%d"), number.Numerator, number.Denominator);
+	}
+	return buff;
+}
+
+TCHAR* CEXIFDisplay::FormatNumber(int number) {
+	TCHAR* buff = new TCHAR[LINE_BUF_SIZE];
+	_stprintf_s(buff, LINE_BUF_SIZE, _T("%d"), number);
+	return buff;
+}
+
+TCHAR* CEXIFDisplay::FormatNumber(double dValue, int nDigits, bool showSign) {
+	TCHAR buffFormat[8];
+	_stprintf_s(buffFormat, 8, showSign ? _T("%%+.%df") : _T("%%.%df"), nDigits);
+	TCHAR* buff = new TCHAR[LINE_BUF_SIZE];
+	_stprintf_s(buff, LINE_BUF_SIZE, buffFormat, dValue);
+	return buff;
 }
 
 CRect CEXIFDisplay::PanelRect() {
