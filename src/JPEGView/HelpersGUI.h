@@ -42,6 +42,9 @@ namespace HelpersGUI {
 	// Selects the default file name font into the given DC.
 	void SelectDefaultFileNameFont(HDC dc);
 
+	// select font identified by fontIdentifier
+	void SelectFont(HDC dc, CString fontIdentifier);
+
 	// Translates all menu strings of the given menu, including the sub-menus
 	void TranslateMenuStrings(HMENU hMenu, CKeyMap* pKeyMap = NULL);
 

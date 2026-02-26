@@ -5,6 +5,7 @@
 #include "ProcessParams.h"
 #include "KeyMap.h"
 #include "SettingsProvider.h"
+#include <map>
 
 static void AddFlagText(CString& sText, LPCTSTR sFlagText, bool bFlag) {
 	sText += sFlagText;
@@ -23,6 +24,7 @@ static HFONT CreateFontFromINIDescription(HDC dc, LPCTSTR sIniFileDescription)
 	CString sFontName;
 	float fFontSize = 9.0f;
 	bool isBold = false;
+	bool isItalic = false;
 	if (sIniDesc.CompareNoCase(_T("default")) != 0) {
 		if (sIniDesc.Find(_T(' ')) == -1) {
 			sIniDesc.TrimLeft(_T('"')); sIniDesc.TrimRight(_T('"'));
@@ -44,6 +46,7 @@ static HFONT CreateFontFromINIDescription(HDC dc, LPCTSTR sIniFileDescription)
 						fFontSize = 9.0;
 					fFontSize = max(7.0f, min(30.0f, fFontSize));
 					isBold = sIniDesc.Find(_T("bold")) != -1;
+					isItalic = sIniDesc.Find(_T("italic")) != -1;
 				}
 			}
 		}
@@ -53,7 +56,7 @@ static HFONT CreateFontFromINIDescription(HDC dc, LPCTSTR sIniFileDescription)
 		return (HFONT)NULL;
 
 	int nHeight = - (int)(0.5f + fFontSize * ::GetDeviceCaps(dc, LOGPIXELSY) / 72);
-	return ::CreateFont(nHeight, 0, 0, 0, isBold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS,
+	return ::CreateFont(nHeight, 0, 0, 0, isBold ? FW_BOLD : FW_NORMAL, isItalic, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS,
 			CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, VARIABLE_PITCH, sFontName);
 }
 
@@ -98,9 +101,7 @@ namespace HelpersGUI {
 
 	float ScreenScaling = -1.0f;
 
-	HFONT DefaultGUIFont = NULL;
-	HFONT SystemFont = NULL;
-	HFONT DefaultFileNameFont = NULL;
+	std::map<CString, HFONT> fonts;
 
 	int ScaleToScreen(int value)
 	{
@@ -121,29 +122,35 @@ namespace HelpersGUI {
 		return NULL;
 	}
 
-	void SelectDefaultGUIFont(HDC dc) {
-		if (DefaultGUIFont == NULL) {
-			DefaultGUIFont = CreateFontFromINIDescription(dc, CSettingsProvider::This().DefaultGUIFont());
-			if (DefaultGUIFont == NULL)
-				DefaultGUIFont = (HFONT)::GetStockObject(DEFAULT_GUI_FONT);
+	HFONT GetOrAddFont(HDC dc, CString fontIdentifier) {
+		if (fonts.count(fontIdentifier) == 0) {
+			HFONT addFont = CreateFontFromINIDescription(dc, fontIdentifier);
+			if (addFont == NULL) {
+				addFont = (HFONT)::GetStockObject(DEFAULT_GUI_FONT);
+			}
+			fonts.insert({ fontIdentifier, addFont });
 		}
-		::SelectObject(dc, DefaultGUIFont);
+		return fonts[fontIdentifier];
+	}
+
+	void SelectDefaultGUIFont(HDC dc) {
+		HFONT defaultGuiFont = GetOrAddFont(dc, CSettingsProvider::This().DefaultGUIFont());
+		SelectObject(dc, defaultGuiFont);
 	}
 
 	void SelectDefaultSystemFont(HDC dc) {
-		if (SystemFont == NULL) {
-			SystemFont = CreateFontFromINIDescription(dc, _T("\"Arial\" 12.0 bold"));
-		}
-		::SelectObject(dc, SystemFont);
+		HFONT systemFont = GetOrAddFont(dc, "\"Arial\" 12.0 bold");
+		SelectObject(dc, systemFont);
 	}
 
 	void SelectDefaultFileNameFont(HDC dc) {
-		if (DefaultFileNameFont == NULL) {
-			DefaultFileNameFont = CreateFontFromINIDescription(dc, CSettingsProvider::This().FileNameFont());
-			if (DefaultFileNameFont == NULL)
-				DefaultFileNameFont = CreateFontFromINIDescription(dc, _T("\"Arial\" 10.0 bold"));
-		}
-		::SelectObject(dc, DefaultFileNameFont);
+		HFONT defaultFileNameFont = GetOrAddFont(dc, CSettingsProvider::This().FileNameFont());
+		SelectObject(dc, defaultFileNameFont);
+	}
+
+	void SelectFont(HDC dc, CString fontIdentifier) {
+		HFONT font = GetOrAddFont(dc, fontIdentifier);
+		SelectObject(dc, font);
 	}
 
 	void TranslateMenuStrings(HMENU hMenu, CKeyMap* pKeyMap) {

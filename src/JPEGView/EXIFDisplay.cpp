@@ -157,6 +157,10 @@ void CEXIFDisplay::AddLine(LPCTSTR sFormat, LPCTSTR sDescription, double nValue1
 	AddLine(sDescription, buff);
 }
 
+void CEXIFDisplay::AddFont(LPCTSTR fontIdentifier) {
+	m_lines.push_back(TextLine(NULL, NULL, false, fontIdentifier));
+}
+
 TCHAR* CEXIFDisplay::FormatNumber(const Rational& number) {
 	TCHAR* buff = new TCHAR[LINE_BUF_SIZE];
 	if (number.Denominator == 1) {
@@ -236,7 +240,11 @@ CRect CEXIFDisplay::PanelRect() {
 
 		int nLen1 = 0, nLen2 = 0;
 		std::list<TextLine>::iterator iter;
-		for (iter = m_lines.begin( ); iter != m_lines.end( ); iter++ ) {
+		for (iter = m_lines.begin(); iter != m_lines.end(); iter++) {
+			if (!iter->FontIdentifier.IsEmpty()) {
+				// change font
+				HelpersGUI::SelectFont(dc, iter->FontIdentifier);
+			}
 			if (iter->Desc != NULL) {
 				::GetTextExtentPoint32(dc, iter->Desc, (int)_tcslen(iter->Desc), &size);
 				m_nLineHeight = max(m_nLineHeight, size.cy);
@@ -323,7 +331,11 @@ void CEXIFDisplay::OnPaint(CDC & dc, const CPoint& offset) {
 	}
 
 	std::list<TextLine>::iterator iter;
-	for (iter = m_lines.begin( ); iter != m_lines.end( ); iter++ ) {
+	for (iter = m_lines.begin(); iter != m_lines.end(); iter++) {
+		if (!iter->FontIdentifier.IsEmpty()) {
+			// change font
+			HelpersGUI::SelectFont(dc, iter->FontIdentifier);
+		}
 		if (iter->Desc != NULL) {
 			::TextOut(dc, nX + m_nGap, nRunningY, iter->Desc, (int)_tcslen(iter->Desc));
 		}
@@ -338,7 +350,10 @@ void CEXIFDisplay::OnPaint(CDC & dc, const CPoint& offset) {
 				::TextOut(dc, nX + m_nGap + m_nTab1, nRunningY, iter->Value, (int)_tcslen(iter->Value));
 			}
 		}
-		nRunningY += m_nLineHeight;
+
+		if (iter->Desc || iter->Value) {
+			nRunningY += m_nLineHeight;
+		}
 	}
 
 	if (m_bShowHistogram) {

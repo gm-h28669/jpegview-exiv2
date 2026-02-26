@@ -45,6 +45,7 @@ public:
 		AddLine(sDescription, buff, false);  
 	}
 
+	void AddFont(LPCTSTR fontIdentifier);
 	TCHAR* FormatNumber(const Rational& number);
 	TCHAR* FormatNumber(int number);
 	TCHAR* FormatNumber(double dValue, int nDigits = 0, bool showSign = false);
@@ -66,15 +67,17 @@ protected:
 private:
 
 	struct TextLine {
-		TextLine(LPCTSTR desc, LPCTSTR value, bool valueIsURL = false) {
+		TextLine(LPCTSTR desc, LPCTSTR value, bool valueIsURL = false, CString fontIdentifier = "") {
 			Desc = desc;
 			Value = value;
 			ValueIsURL = valueIsURL;
+			FontIdentifier = fontIdentifier;
 		}
 
 		LPCTSTR Desc;
 		LPCTSTR Value;
 		bool ValueIsURL;
+		CString FontIdentifier;
 	};
 
 	bool m_bShowHistogram;

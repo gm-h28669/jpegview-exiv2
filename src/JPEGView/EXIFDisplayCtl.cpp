@@ -13,6 +13,8 @@
 #undef SHOW_FILENAME
 #define SHOW_COMPACT
 
+constexpr const TCHAR HIGHLIGHT_FONT[] = _T("\"Consolas\" 12.0 bold");
+
 static int GetFileNameHeight(HDC dc) {
 	CSize size;
 	HelpersGUI::SelectDefaultFileNameFont(dc);
@@ -141,6 +143,7 @@ void CEXIFDisplayCtl::FillEXIFDataDisplay() {
 
 #ifdef SHOW_COMPACT
 			// display date taken (if missing display last modified time)
+			m_pEXIFDisplay->AddFont(HIGHLIGHT_FONT);
 			if (pEXIFReader->GetAcquisitionTimePresent()) {
 				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), pEXIFReader->GetAcquisitionTime());
 			}
@@ -176,18 +179,20 @@ void CEXIFDisplayCtl::FillEXIFDataDisplay() {
 
 			CString sFlashFired = pEXIFReader->GetFlashFiredPresent() && pEXIFReader->GetFlashFired() ? _T("⚡") : _T("");
 
-			CString cameraInfoFormat = _T("%ss • f/%s • ISO %s •%s %s%smm %s");
-			m_pEXIFDisplay->AddLine(cameraInfoFormat, _T(""), sExposureTime, sFNumber, sISOSpeed, sExposureBias, sFocalLength, sFocalLengthEquiv, sFlashFired);
+			CString exposureInfoFormat = _T("%ss • f/%s • ISO %s •%s %s%smm %s");
+			m_pEXIFDisplay->AddLine(exposureInfoFormat, _T(""), sExposureTime, sFNumber, sISOSpeed, sExposureBias, sFocalLength, sFocalLengthEquiv, sFlashFired);
+			m_pEXIFDisplay->AddFont(CSettingsProvider::This().DefaultGUIFont());
 
-			// display camera make and model
-			if (pEXIFReader->GetCameraModelPresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), pEXIFReader->GetCameraModel());
-			}
+			// show camera make, camera model and lens info in one line
+			CString sCameraModel = pEXIFReader->GetCameraModelPresent()
+				? pEXIFReader->GetCameraModel() : _T("");
 
-			// display lens info 
-			CString sLensInfo = pEXIFReader->GetLensInfo();
-			if (!sLensInfo.IsEmpty()) {
-				m_pEXIFDisplay->AddLine(_T(""), sLensInfo);
+			CString sLensInfo = !pEXIFReader->GetLensInfo().IsEmpty()
+				? _T(" • ") + pEXIFReader->GetLensInfo() : _T("");
+			
+			if (!sCameraModel.IsEmpty()) {
+				CString cameraInfoFormat = _T("%s%s");
+				m_pEXIFDisplay->AddLine(cameraInfoFormat, _T(""), sCameraModel, sLensInfo);
 			}
 
 			// display image size: widthx height and size in Megapixels
@@ -249,6 +254,18 @@ void CEXIFDisplayCtl::FillEXIFDataDisplay() {
 		}
 		else if (pRawMetaData != NULL) {
 #ifdef SHOW_COMPACT
+			m_pEXIFDisplay->AddFont(HIGHLIGHT_FONT);
+			// display date taken (if missing display last modified time)
+			if (pRawMetaData->GetAcquisitionTime().wYear > 1985) {
+				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), pRawMetaData->GetAcquisitionTime());
+			}
+			else {
+				const FILETIME* pFileTime = pFileList->CurrentModificationTime();
+				if (pFileTime != NULL) {
+					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), *pFileTime);
+				}
+			}
+
 			// show exposure time, aperture, ISO speed, focal length, and flash indication in one line
 			double exposureTime = pRawMetaData->GetExposureTime();
 			Rational rational = (exposureTime < 1.0) 
@@ -269,20 +286,10 @@ void CEXIFDisplayCtl::FillEXIFDataDisplay() {
 
 			CString cameraInfoFormat = _T("%ss • f/%s • ISO %s • %smm %s");
 			m_pEXIFDisplay->AddLine(cameraInfoFormat, _T(""), sExposureTime, sFNumber, sISOSpeed, sFocalLength, sFlashFired);
+			m_pEXIFDisplay->AddFont(CSettingsProvider::This().DefaultGUIFont());
 
 			if (pRawMetaData->GetManufacturer()[0] != 0) {
 				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), CString(pRawMetaData->GetManufacturer()) + _T(" ") + pRawMetaData->GetModel());
-			}
-
-			// display date taken (if missing display last modified time)
-			if (pRawMetaData->GetAcquisitionTime().wYear > 1985) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), pRawMetaData->GetAcquisitionTime());
-			}
-			else {
-				const FILETIME* pFileTime = pFileList->CurrentModificationTime();
-				if (pFileTime != NULL) {
-					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), *pFileTime);
-				}
 			}
 
 			// display image size: widthx height and size in Megapixels
