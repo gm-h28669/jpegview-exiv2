@@ -11,6 +11,8 @@
 #include <dbghelp.h>
 #endif
 
+#define MULTIPLE_INSTANCES_ALLOWED
+
 // _CrtDumpMemoryLeaks
 
 CAppModule _Module;
@@ -213,6 +215,8 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 
 	// Searches for other instances and terminates them
 	bool bFileLoadedByExistingInstance = false;
+
+#ifndef MULTIPLE_INSTANCES_ALLOWED
 	HANDLE hMutex = ::CreateMutex(NULL, FALSE, _T("JPVMtX2869"));
 	if (::GetLastError() == ERROR_ALREADY_EXISTS) {
 		::EnumWindows((WNDENUMPROC)EnumWindowsProc, 0);
@@ -228,6 +232,7 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 			bFileLoadedByExistingInstance = *resultPtr == (ULONG_PTR)KEY_MAGIC;
 		}
 	}
+#endif
 
 	int nRet = 0;
 	//Run application
@@ -256,7 +261,9 @@ int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lp
 		Gdiplus::GdiplusShutdown(gdiplusToken);
 	}
 
+#ifndef MULTIPLE_INSTANCES_ALLOWED
 	::CloseHandle(hMutex);
+#endif
 
 	_Module.Term();
 	::CoUninitialize();
