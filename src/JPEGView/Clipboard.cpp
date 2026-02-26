@@ -134,6 +134,10 @@ void CClipboard::DoCopy(HWND hWnd, int nWidth, int nHeight, const void* pSourceI
 		return;
 	}
 	void* pMemory = ::GlobalLock(hMem); 
+	if (pMemory == NULL) {
+		::CloseClipboard();
+		return;
+	}
 
 	BITMAPINFO* pBMInfo = (BITMAPINFO*) pMemory;
 	memset(pBMInfo, 0, sizeof(BITMAPINFO));
