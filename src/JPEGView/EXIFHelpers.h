@@ -21,4 +21,9 @@ namespace EXIFHelpers {
 	// Sets the modification date of all JPEG files in the given directory to the EXIF date.
 	EXIFResult SetModificationDateToEXIFAllFiles(LPCTSTR sDirectory);
 
+	// for given camera make and model, return crop factor
+	double GetCropFactor(const CString make, const CString model, double focalLength);
+
+	// for given camera make, model and focal length, return crop factor
+	double CalcFocalLengthEquivalent(const CString make, const CString model, double focalLength);
 }

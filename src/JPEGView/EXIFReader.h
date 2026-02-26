@@ -11,9 +11,17 @@ public:
 // Unsigned rational number: numerator/denominator
 class Rational {
 public:
+	Rational() { Numerator = 0; Denominator = 0; }
 	Rational(unsigned int num, unsigned int denom) { Numerator = num; Denominator = denom; }
 	unsigned int Numerator;
 	unsigned int Denominator;
+	bool IsEmpty() const {
+		return Numerator == 0 && Denominator == 0;
+	}
+	operator double() const {
+		return Denominator != 0 ? (double)Numerator / (double)Denominator
+			: std::numeric_limits<double>::quiet_NaN();
+	}
 };
 
 class GPSCoordinate {
@@ -75,15 +83,26 @@ public:
 	// Flag if flash fired
 	bool GetFlashFired() { return m_bFlashFired; }
 	bool GetFlashFiredPresent() { return m_bFlashFlagPresent; }
-	// Focal length (mm)
-	double GetFocalLength() { return m_dFocalLength; }
-	bool GetFocalLengthPresent() { return m_dFocalLength != UNKNOWN_DOUBLE_VALUE; }
+	// Focal length (mm), the focal lenght is stored as a rational number
+	double GetFocalLength() { return (double)m_focalLength.Numerator / (double)m_focalLength.Denominator; }
+	bool GetFocalLengthPresent() { return m_focalLength.Denominator != 0; }
 	// F-Number
 	double GetFNumber() { return m_dFNumber; }
 	bool GetFNumberPresent() { return m_dFNumber != UNKNOWN_DOUBLE_VALUE; }
 	// ISO speed value
 	int GetISOSpeed() { return m_nISOSpeed; }
 	bool GetISOSpeedPresent() { return m_nISOSpeed > 0; }
+	// Focal length equivalent for standard 36mm x 24mm
+	int GetFocalLengthEquivalent() { return m_focalLengthEquivalent; }
+	bool GetFocalLengthEquivalentPresent() { return m_focalLengthEquivalent != 0; }
+	// Camera make
+	LPCTSTR GetCameraMake() { return m_sMake; }
+	bool GetCameraMakePresent() { return !m_sMake.IsEmpty(); }
+	// Lens info (zoom range and maximum aperture range)
+	CString GetLensInfo();
+	// Lens model
+	LPCTSTR GetLensModel() { return m_sLensModel; }
+	bool GetLensModelPresent() { return !m_sLensModel.IsEmpty(); }
 	// Image orientation as detected by sensor, coding according EXIF standard (thus no angle in degrees)
 	int GetImageOrientation() { return m_nImageOrientation; }
 	bool ImageOrientationPresent() { return m_nImageOrientation > 0; }
@@ -111,6 +130,9 @@ public:
 	// Delete the thumbnail image
 	// Writes to the APP1 block passed in constructor.
 	void DeleteThumbnail();
+
+	// calculate 25mm focal lenght equivalent
+	double CalcFocalLengthEquiv(double focalLength);
 public:
 	// unknown double value
 	static double UNKNOWN_DOUBLE_VALUE;
@@ -137,6 +159,11 @@ private:
 	GPSCoordinate* m_pLatitude;
 	GPSCoordinate* m_pLongitude;
 	double m_dAltitude;
+	CString m_sMake;
+	CString m_sLensModel;
+	Rational m_focalLength;
+	Rational m_lensInfo[4];
+	int m_focalLengthEquivalent;
 
 	bool m_bLittleEndian;
 	uint8* m_pApp1;

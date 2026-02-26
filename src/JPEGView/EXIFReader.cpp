@@ -2,8 +2,66 @@
 #include "EXIFReader.h"
 #include "ImageProcessingTypes.h"
 #include "Helpers.h"
+#include "EXIFHelpers.h"
 
 double CEXIFReader::UNKNOWN_DOUBLE_VALUE = 283740261.192864;
+
+namespace EXIF {
+	// IFD0 Tags (TIFF/EXIF Image IFD)
+	constexpr uint16 TAG_IMAGE_DESCRIPTION = 0x010E;
+	constexpr uint16 TAG_MAKE = 0x010F;
+	constexpr uint16 TAG_MODEL = 0x0110;
+	constexpr uint16 TAG_ORIENTATION = 0x0112;
+	constexpr uint16 TAG_SOFTWARE = 0x0131;
+	constexpr uint16 TAG_DATE_TIME = 0x0132;
+	constexpr uint16 TAG_EXIF_IFD = 0x8769;
+	constexpr uint16 TAG_GPS_IFD = 0x8825;
+
+	// EXIF IFD Tags
+	constexpr uint16 TAG_DATE_TIME_ORIGINAL = 0x9003;
+	constexpr uint16 TAG_EXPOSURE_TIME = 0x829A;
+	constexpr uint16 TAG_F_NUMBER = 0x829D;
+	constexpr uint16 TAG_EXPOSURE_BIAS = 0x9204;
+	constexpr uint16 TAG_FLASH = 0x9209;
+	constexpr uint16 TAG_FOCAL_LENGTH = 0x920A;
+	constexpr uint16 TAG_ISO_SPEED_RATINGS = 0x8827;
+	constexpr uint16 TAG_ISO_SPEED_EXIF_V3 = 0x8833;  // EXIF 3.0 spec
+	constexpr uint16 TAG_USER_COMMENT = 0x9286;
+	constexpr uint16 TAG_XP_COMMENT = 0x9C9C;
+	constexpr uint16 TAG_FOCAL_LEN_35MM = 0xA405;
+	constexpr uint16 TAG_LENS_MODEL = 0xA434;
+	constexpr uint16 TAG_LENS_INFO = 0xA432;
+
+	// IFD1 Thumbnail Tags (TIFF)
+	constexpr uint16 TAG_IMAGE_WIDTH = 0x0100;  // ImageWidth (for thumb)
+	constexpr uint16 TAG_IMAGE_HEIGHT = 0x0101;  // ImageHeight (for thumb)
+	constexpr uint16 TAG_COMPRESSION = 0x0103;
+	constexpr uint16 TAG_JPEG_INTERCHANGE = 0x0201;  // JPEGInterchangeFormat
+	constexpr uint16 TAG_JPEG_INTERCHANGE_LEN = 0x0202;
+
+	// GPS IFD Tags
+	constexpr uint16 TAG_GPS_LATITUDE_REF = 0x0001;
+	constexpr uint16 TAG_GPS_LATITUDE = 0x0002;
+	constexpr uint16 TAG_GPS_LONGITUDE_REF = 0x0003;
+	constexpr uint16 TAG_GPS_LONGITUDE = 0x0004;
+	constexpr uint16 TAG_GPS_ALTITUDE_REF = 0x0005;
+	constexpr uint16 TAG_GPS_ALTITUDE = 0x0006;
+
+	// Data Type Constants
+	constexpr uint16 TYPE_ASCII = 0x0002;
+	constexpr uint16 TYPE_SHORT = 0x0003;
+	constexpr uint16 TYPE_LONG = 0x0004;
+	constexpr uint16 TYPE_RATIONAL = 0x0005;
+	constexpr uint16 TYPE_UNDEFINED = 0x0007;
+	constexpr uint16 TYPE_SRATIONAL = 0x000A;
+
+	// TIFF Header Byte Order (bytes 0-1)
+	constexpr uint16 TIFF_LITTLE_ENDIAN = 0x4949;
+	constexpr uint16 TIFF_BIG_ENDIAN = 0x4D4D;
+
+	// TIFF Magic Number (bytes 2-3) - always 42
+	constexpr uint16 TIFF_VERSION = 0x002A;
+}
 
 static uint32 ReadUInt(void * ptr, bool bLittleEndian) {
 	uint32 nValue = *((uint32*)ptr);
@@ -51,7 +109,7 @@ static uint8* FindTag(uint8* ptr, uint8* ptrLast, uint16 nTag, bool bLittleEndia
 
 static void ReadStringTag(CString & strOut, uint8* ptr, uint8* pTIFFHeader, bool bLittleEndian, bool bTryReadAsUTF8 = false, uint32 maxLength = 65536) {
 	try {
-		if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == 2) {
+		if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == EXIF::TYPE_ASCII) {
 			uint32 nSize = ReadUInt(ptr + 4, bLittleEndian);
 			if (nSize > maxLength) {
 				strOut.Empty();
@@ -78,7 +136,7 @@ static void ReadStringTag(CString & strOut, uint8* ptr, uint8* pTIFFHeader, bool
 
 static void ReadUserCommentTag(CString & strOut, uint8* ptr, uint8* pTIFFHeader, bool bLittleEndian) {
 	try {
-		if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == 7) {
+		if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == EXIF::TYPE_UNDEFINED) {
 			int nSize = ReadUInt(ptr + 4, bLittleEndian);
 			if (nSize > 10 && nSize <= 4096) {
 				LPCSTR sCodeDesc = (LPCSTR)(pTIFFHeader + ReadUInt(ptr + 8, bLittleEndian));
@@ -88,10 +146,10 @@ static void ReadUserCommentTag(CString & strOut, uint8* ptr, uint8* pTIFFHeader,
 					bool bLE = bLittleEndian;
 					nSize -= 8;
 					sCodeDesc += 8;
-					if (sCodeDesc[0] == 0xFF && sCodeDesc[1] == 0xFE) {
+					if (sCodeDesc[0] == 0xFF && sCodeDesc[1] == 0xFE) {			// BOM UTF16 Little Endian
 						bLE = true;
 						nSize -= 2; sCodeDesc += 2;
-					} else if (sCodeDesc[0] == 0xFE && sCodeDesc[1] == 0xFF) {
+					} else if (sCodeDesc[0] == 0xFE && sCodeDesc[1] == 0xFF) {	// BOM UTF16 Big Endian
 						bLE = false;
 						nSize -= 2; sCodeDesc += 2;
 					}
@@ -121,7 +179,7 @@ static void ReadUserCommentTag(CString & strOut, uint8* ptr, uint8* pTIFFHeader,
 }
 
 static uint32 ReadLongTag(uint8* ptr, bool bLittleEndian) {
-	if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == 4) {
+	if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == EXIF::TYPE_LONG) {
 		return ReadUInt(ptr + 8, bLittleEndian);
 	} else {
 		return 0;
@@ -129,7 +187,7 @@ static uint32 ReadLongTag(uint8* ptr, bool bLittleEndian) {
 }
 
 static uint16 ReadShortTag(uint8* ptr, bool bLittleEndian) {
-	if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == 3) {
+	if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == EXIF::TYPE_SHORT) {
 		return ReadUShort(ptr + 8, bLittleEndian);
 	} else {
 		return 0;
@@ -139,9 +197,9 @@ static uint16 ReadShortTag(uint8* ptr, bool bLittleEndian) {
 static uint32 ReadShortOrLongTag(uint8* ptr, bool bLittleEndian) {
 	if (ptr != NULL) {
 		uint16 nType = ReadUShort(ptr + 2, bLittleEndian);
-		if (nType == 3) {
+		if (nType == EXIF::TYPE_SHORT) {
 			return ReadUShort(ptr + 8, bLittleEndian);
-		} else if (nType == 4) {
+		} else if (nType == EXIF::TYPE_LONG) {
 			return ReadUInt(ptr + 8, bLittleEndian);
 		}
 	}
@@ -149,13 +207,13 @@ static uint32 ReadShortOrLongTag(uint8* ptr, bool bLittleEndian) {
 }
 
 static void WriteShortTag(uint8* ptr, uint16 nValue, bool bLittleEndian) {
-	if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == 3) {
+	if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == EXIF::TYPE_SHORT) {
 		WriteUShort(ptr + 8, nValue, bLittleEndian);
 	}
 }
 
 static void WriteLongTag(uint8* ptr, uint32 nValue, bool bLittleEndian) {
-	if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == 4) {
+	if (ptr != NULL && ReadUShort(ptr + 2, bLittleEndian) == EXIF::TYPE_LONG) {
 		WriteUInt(ptr + 8, nValue, bLittleEndian);
 	}
 }
@@ -167,22 +225,22 @@ static int ReadRationalTag(Rational & rational, uint8* ptr, uint8* pTIFFHeader, 
 		uint16 nType = ReadUShort(ptr + 2, bLittleEndian);
 		uint16 nCount = ReadUInt(ptr + 4, bLittleEndian);
 		if (index < nCount) {
-			if (nType == 5 || nType == 10) {
+			if (nType == EXIF::TYPE_RATIONAL || nType == EXIF::TYPE_SRATIONAL) {
 				int nOffset = ReadUInt(ptr + 8, bLittleEndian) + index * 8;
 				rational.Numerator = ReadUInt(pTIFFHeader + nOffset, bLittleEndian);
 				rational.Denominator = ReadUInt(pTIFFHeader + nOffset + 4, bLittleEndian);
 				if (rational.Numerator != 0 && rational.Denominator != 0) {
 					// Calculate the ggT
 					uint32 nModulo;
-					uint32 nA = (nType == 10) ? abs((int)rational.Numerator) : rational.Numerator;
-					uint32 nB = (nType == 10) ? abs((int)rational.Denominator) : rational.Denominator;
+					uint32 nA = (nType == EXIF::TYPE_SRATIONAL) ? abs((int)rational.Numerator) : rational.Numerator;
+					uint32 nB = (nType == EXIF::TYPE_SRATIONAL) ? abs((int)rational.Denominator) : rational.Denominator;
 					do {
 						nModulo = nA % nB;
 						nA = nB;
 						nB = nModulo;
 					} while (nB != 0);
 					// normalize
-					if (nType == 10) {
+					if (nType == EXIF::TYPE_SRATIONAL) {
 						rational.Numerator = (int)rational.Numerator / (int)nA;
 						rational.Denominator = (int)rational.Denominator / (int)nA;
 					}
@@ -210,7 +268,7 @@ static double ReadDoubleTag(uint8* ptr, uint8* pTIFFHeader, int index, bool bLit
 	Rational rational(0, 0);
 	int nType = ReadRationalTag(rational, ptr, pTIFFHeader, index, bLittleEndian);
 	if (rational.Denominator != 0) {
-		if (nType == 5) {
+		if (nType == EXIF::TYPE_RATIONAL) {
 			return (double)rational.Numerator / rational.Denominator;
 		} else {
 			int nNum = rational.Numerator;
@@ -263,6 +321,8 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	m_pLatitude = NULL;
 	m_pLongitude = NULL;
 	m_dAltitude = UNKNOWN_DOUBLE_VALUE;
+	m_dExposureBias = m_dFNumber = UNKNOWN_DOUBLE_VALUE;
+	m_focalLengthEquivalent = 0;
 
 	m_pApp1 = (uint8*)pApp1Block;
 	// APP1 marker
@@ -274,9 +334,9 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	// Read TIFF header
 	uint8* pTIFFHeader = m_pApp1 + 10;
 	bool bLittleEndian;
-	if (*(short*)pTIFFHeader == 0x4949) {
+	if (*(short*)pTIFFHeader == EXIF::TIFF_LITTLE_ENDIAN) {
 		bLittleEndian = true;
-	} else if (*(short*)pTIFFHeader == 0x4D4D) {
+	} else if (*(short*)pTIFFHeader == EXIF::TIFF_BIG_ENDIAN) {
 		bLittleEndian = false;
 	} else {
 		return;
@@ -301,47 +361,50 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	uint8* pTagOrientation = NULL;
 	// orientation tags must be ignored for JXL and HEIF/AVIF
 	if (eImageFormat != IF_JXL && eImageFormat != IF_HEIF && eImageFormat != IF_AVIF) {
-		pTagOrientation = FindTag(pIFD0, pLastIFD0, 0x112, bLittleEndian);
+		pTagOrientation = FindTag(pIFD0, pLastIFD0, EXIF::TAG_ORIENTATION, bLittleEndian);
 	}
 	if (pTagOrientation != NULL) {
 		m_nImageOrientation = ReadShortTag(pTagOrientation, bLittleEndian);
 	}
 	m_pTagOrientation = pTagOrientation;
 
-	uint8* pTagModel = FindTag(pIFD0, pLastIFD0, 0x110, bLittleEndian);
+	uint8* pTagModel = FindTag(pIFD0, pLastIFD0, EXIF::TAG_MODEL, bLittleEndian);
 	ReadStringTag(m_sModel, pTagModel, pTIFFHeader, bLittleEndian);
 
-	uint8* pTagImageDesc = FindTag(pIFD0, pLastIFD0, 0x10E, bLittleEndian);
+	uint8* pTagImageDesc = FindTag(pIFD0, pLastIFD0, EXIF::TAG_IMAGE_DESCRIPTION, bLittleEndian);
 	ReadStringTag(m_sImageDescription, pTagImageDesc, pTIFFHeader, bLittleEndian, true);
+	if (_tcsicmp(m_sImageDescription, _T("OLYMPUS DIGITAL CAMERA")) == 0) {
+		m_sImageDescription = _T("");
+	}
 
 	// Add the manufacturer name if not contained in model name
 	if (!m_sModel.IsEmpty()) {
 		CString sMake;
-		uint8* pTagMake = FindTag(pIFD0, pLastIFD0, 0x10F, bLittleEndian);
+		uint8* pTagMake = FindTag(pIFD0, pLastIFD0, EXIF::TAG_MAKE, bLittleEndian);
 		ReadStringTag(sMake, pTagMake, pTIFFHeader, bLittleEndian);
 		if (!sMake.IsEmpty()) {
 			int nSpace = sMake.Find(_T(' '));
-			CString sMakeL(nSpace > 0 ? sMake.Left(nSpace) : sMake);
-			if (m_sModel.Find(sMakeL) == -1) {
-				m_sModel = sMakeL + _T(" ") + m_sModel;
+			m_sMake = nSpace > 0 ? sMake.Left(nSpace) : sMake;
+			if (m_sModel.Find(m_sMake) == -1) {
+				m_sModel = m_sMake + _T(" ") + m_sModel;
 			}
 		}
 	}
 
-	uint8* pTagSoftware = FindTag(pIFD0, pLastIFD0, 0x0131, bLittleEndian);
+	uint8* pTagSoftware = FindTag(pIFD0, pLastIFD0, EXIF::TAG_SOFTWARE, bLittleEndian);
 	ReadStringTag(m_sSoftware, pTagSoftware, pTIFFHeader, bLittleEndian);
 
-	uint8* pTagModDate = FindTag(pIFD0, pLastIFD0, 0x0132, bLittleEndian);
+	uint8* pTagModDate = FindTag(pIFD0, pLastIFD0, EXIF::TAG_DATE_TIME, bLittleEndian);
 	CString sModDate;
 	ReadStringTag(sModDate, pTagModDate, pTIFFHeader, bLittleEndian);
 	ParseDateString(m_dateTime, sModDate);
 
-	uint8* pTagEXIFIFD = FindTag(pIFD0, pLastIFD0, 0x8769, bLittleEndian);
+	uint8* pTagEXIFIFD = FindTag(pIFD0, pLastIFD0, EXIF::TAG_EXIF_IFD, bLittleEndian);
 	if (pTagEXIFIFD == NULL) {
 		return;
 	}
 
-	uint8* pTagGPSIFD = FindTag(pIFD0, pLastIFD0, 0x8825, bLittleEndian);
+	uint8* pTagGPSIFD = FindTag(pIFD0, pLastIFD0, EXIF::TAG_GPS_IFD, bLittleEndian);
 	if (pTagGPSIFD != NULL) {
 		ReadGPSData(pTIFFHeader, pTagGPSIFD, nApp1Size, bLittleEndian);
 	}
@@ -361,44 +424,56 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	if (pLastEXIF - m_pApp1 >= nApp1Size) {
 		return;
 	}
-	uint8* pTagAcquisitionDate = FindTag(pEXIFIFD, pLastEXIF, 0x9003, bLittleEndian);
+	uint8* pTagAcquisitionDate = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_DATE_TIME_ORIGINAL, bLittleEndian);
 	CString sAcqDate;
 	ReadStringTag(sAcqDate, pTagAcquisitionDate, pTIFFHeader, bLittleEndian);
 	ParseDateString(m_acqDate, sAcqDate);
 
-	uint8* pTagExposureTime = FindTag(pEXIFIFD, pLastEXIF, 0x829A, bLittleEndian);
+	uint8* pTagExposureTime = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_EXPOSURE_TIME, bLittleEndian);
 	ReadRationalTag(m_exposureTime, pTagExposureTime, pTIFFHeader, bLittleEndian);
 
-	uint8* pTagExposureBias = FindTag(pEXIFIFD, pLastEXIF, 0x9204, bLittleEndian);
+	uint8* pTagExposureBias = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_EXPOSURE_BIAS, bLittleEndian);
 	m_dExposureBias = ReadDoubleTag(pTagExposureBias, pTIFFHeader, bLittleEndian);
 
-	uint8* pTagFlash = FindTag(pEXIFIFD, pLastEXIF, 0x9209, bLittleEndian);
+	uint8* pTagFlash = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_FLASH, bLittleEndian);
 	uint16 nFlash = ReadShortTag(pTagFlash, bLittleEndian);
 	m_bFlashFired = (nFlash & 1) != 0;
 	m_bFlashFlagPresent = pTagFlash != NULL;
 
-	uint8* pTagFocalLength = FindTag(pEXIFIFD, pLastEXIF, 0x920A, bLittleEndian);
-	m_dFocalLength = ReadDoubleTag(pTagFocalLength, pTIFFHeader, bLittleEndian);
+	uint8* pTagFocalLength = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_FOCAL_LENGTH, bLittleEndian);
+	ReadRationalTag(m_focalLength, pTagFocalLength, pTIFFHeader, bLittleEndian);
 
-	uint8* pTagFNumber = FindTag(pEXIFIFD, pLastEXIF, 0x829D, bLittleEndian);
+	uint8* pTagFNumber = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_F_NUMBER, bLittleEndian);
 	m_dFNumber = ReadDoubleTag(pTagFNumber, pTIFFHeader, bLittleEndian);
 
-	uint8* pTagISOSpeed = FindTag(pEXIFIFD, pLastEXIF, 0x8827, bLittleEndian);
-
-	uint8* pTagISOSpeed2 = FindTag(pEXIFIFD, pLastEXIF, 0x8833, bLittleEndian);
+	uint8* pTagISOSpeed = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_ISO_SPEED_RATINGS, bLittleEndian);
+	uint8* pTagISOSpeed2 = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_ISO_SPEED_EXIF_V3, bLittleEndian);	// EXIF 3.0 spec
 
 	m_nISOSpeed = (pTagISOSpeed != NULL) ? ReadShortTag(pTagISOSpeed, bLittleEndian) :
 		ReadLongTag(pTagISOSpeed2, bLittleEndian);
 
-	uint8* pTagUserComment = FindTag(pEXIFIFD, pLastEXIF, 0x9286, bLittleEndian);
+	uint8* pTagUserComment = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_USER_COMMENT, bLittleEndian);
 	ReadUserCommentTag(m_sUserComment, pTagUserComment, pTIFFHeader, bLittleEndian);
 	// Samsung Galaxy puts this useless comment into each JPEG, just ignore
 	if (m_sUserComment == "User comments") {	
 		m_sUserComment = "";
 	}
 
+	uint8* pTagFocalLengthEquivalent = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_FOCAL_LEN_35MM, bLittleEndian);
+	m_focalLengthEquivalent = ReadShortTag(pTagFocalLengthEquivalent, bLittleEndian);
+
+	uint8* pTagLensModel = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_LENS_MODEL, bLittleEndian);
+	ReadStringTag(m_sLensModel, pTagLensModel, pTIFFHeader, bLittleEndian);
+
+	uint8* pTagLensInfo = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_LENS_INFO, bLittleEndian);
+	for (int i = 0; i < 4; i++) {
+		ReadRationalTag(m_lensInfo[i], pTagLensInfo, pTIFFHeader, i, bLittleEndian);
+	}
+
+	// Read IFD1 (thumbnail image)
+
 	// https://exiv2.org/tags.html
-	// uint8* pTagXPComment = FindTag(pIFD0, pLastIFD0, 0x9c9c, bLittleEndian);  // this is the XPComment tag to resolve this issue https://github.com/sylikc/jpegview/issues/72 , but I'm not sure how to decode it
+	// uint8* pTagXPComment = FindTag(pIFD0, pLastIFD0, EXIF::TAG_XP_COMMENT, bLittleEndian);  // this is the XPComment tag to resolve this issue https://github.com/sylikc/jpegview/issues/72 , but I'm not sure how to decode it
 
 
 	if (nOffsetIFD1 != 0) {
@@ -413,14 +488,14 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 			return;
 		}
 		m_pLastIFD1 = pLastIFD1;
-		uint8* pTagCompression = FindTag(m_pIFD1, pLastIFD1, 0x103, bLittleEndian);
+		uint8* pTagCompression = FindTag(m_pIFD1, pLastIFD1, EXIF::TAG_COMPRESSION, bLittleEndian);
 		if (pTagCompression == NULL) {
 			return;
 		}
 		if (ReadShortTag(pTagCompression, bLittleEndian) == 6) {
 			// compressed
-			uint8* pTagOffsetSOI = FindTag(m_pIFD1, pLastIFD1, 0x0201, bLittleEndian);
-			uint8* pTagJPEGLen = FindTag(m_pIFD1, pLastIFD1, 0x0202, bLittleEndian);
+			uint8* pTagOffsetSOI = FindTag(m_pIFD1, pLastIFD1, EXIF::TAG_JPEG_INTERCHANGE, bLittleEndian);
+			uint8* pTagJPEGLen = FindTag(m_pIFD1, pLastIFD1, EXIF::TAG_JPEG_INTERCHANGE_LEN, bLittleEndian);
 			if (pTagOffsetSOI != NULL && pTagJPEGLen != NULL) {
 				uint32 nOffsetSOI = ReadLongTag(pTagOffsetSOI, bLittleEndian);
 				uint32 nJPEGBytes = ReadLongTag(pTagJPEGLen, bLittleEndian);
@@ -435,8 +510,8 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 			}
 		} else {
 			// uncompressed
-			uint8* pTagThumbWidth = FindTag(m_pIFD1, pLastIFD1, 0x0001, bLittleEndian);
-			uint8* pTagThumbHeight = FindTag(m_pIFD1, pLastIFD1, 0x0101, bLittleEndian);
+			uint8* pTagThumbWidth = FindTag(m_pIFD1, pLastIFD1, EXIF::TAG_IMAGE_WIDTH, bLittleEndian);
+			uint8* pTagThumbHeight = FindTag(m_pIFD1, pLastIFD1, EXIF::TAG_IMAGE_HEIGHT, bLittleEndian);
 			if (pTagThumbWidth != NULL && pTagThumbHeight != NULL) {
 				m_nThumbWidth = ReadShortOrLongTag(pTagThumbWidth, bLittleEndian);
 				m_nThumbHeight = ReadShortOrLongTag(pTagThumbHeight, bLittleEndian);
@@ -466,13 +541,13 @@ void CEXIFReader::UpdateJPEGThumbnail(unsigned char* pJPEGStream, int nStreamLen
 	if (!m_bHasJPEGCompressedThumbnail) {
 		return;
 	}
-	uint8* pTagOffsetSOI = FindTag(m_pIFD1, m_pLastIFD1, 0x0201, m_bLittleEndian);
+	uint8* pTagOffsetSOI = FindTag(m_pIFD1, m_pLastIFD1, EXIF::TAG_JPEG_INTERCHANGE, m_bLittleEndian);
 	uint32 nOffsetSOI = ReadLongTag(pTagOffsetSOI, m_bLittleEndian);
 	uint8* pTIFFHeader = m_pApp1 + 10;
 	uint8* pSOI = pTIFFHeader + nOffsetSOI;
 	memcpy(pSOI + 2, pJPEGStream, nStreamLen);
 
-	uint8* pTagJPEGBytes = FindTag(m_pIFD1, m_pLastIFD1, 0x0202, m_bLittleEndian);
+	uint8* pTagJPEGBytes = FindTag(m_pIFD1, m_pLastIFD1, EXIF::TAG_JPEG_INTERCHANGE_LEN, m_bLittleEndian);
 	WriteLongTag(pTagJPEGBytes, nStreamLen + 2, m_bLittleEndian);
 	int nNewApp1Size = m_pApp1[2]*256 + m_pApp1[3] + nEXIFBlockLenCorrection;
 	m_pApp1[2] = nNewApp1Size >> 8;
@@ -495,28 +570,28 @@ void CEXIFReader::ReadGPSData(uint8* pTIFFHeader, uint8* pTagGPSIFD, int nApp1Si
 		return;
 	}
 
-	uint8* pTagLatitudeRef = FindTag(pGPSIFD, pLastGPS, 0x1, bLittleEndian);
+	uint8* pTagLatitudeRef = FindTag(pGPSIFD, pLastGPS, EXIF::TAG_GPS_LATITUDE_REF, bLittleEndian);
 	if (pTagLatitudeRef == NULL)
 		return;
 	CString latitudeRef;
 	ReadStringTag(latitudeRef, pTagLatitudeRef, pTIFFHeader, bLittleEndian, false, 2);
 
-	uint8* pTagLatitude = FindTag(pGPSIFD, pLastGPS, 0x2, bLittleEndian);
+	uint8* pTagLatitude = FindTag(pGPSIFD, pLastGPS, EXIF::TAG_GPS_LATITUDE, bLittleEndian);
 	m_pLatitude = ReadGPSCoordinate(pTIFFHeader, pTagLatitude, latitudeRef, bLittleEndian);
 
-	uint8* pTagLongitudeRef = FindTag(pGPSIFD, pLastGPS, 0x3, bLittleEndian);
+	uint8* pTagLongitudeRef = FindTag(pGPSIFD, pLastGPS, EXIF::TAG_GPS_LONGITUDE_REF, bLittleEndian);
 	if (pTagLongitudeRef == NULL)
 		return;
 	CString longitudeRef;
 	ReadStringTag(longitudeRef, pTagLongitudeRef, pTIFFHeader, bLittleEndian, false, 2);
 
-	uint8* pTagLongitude = FindTag(pGPSIFD, pLastGPS, 0x4, bLittleEndian);
+	uint8* pTagLongitude = FindTag(pGPSIFD, pLastGPS, EXIF::TAG_GPS_LONGITUDE, bLittleEndian);
 	m_pLongitude = ReadGPSCoordinate(pTIFFHeader, pTagLongitude, longitudeRef, bLittleEndian);
 
-	uint8* pTagAltitude = FindTag(pGPSIFD, pLastGPS, 0x6, bLittleEndian);
+	uint8* pTagAltitude = FindTag(pGPSIFD, pLastGPS, EXIF::TAG_GPS_ALTITUDE, bLittleEndian);
 	if (pTagAltitude != NULL) {
 		m_dAltitude = ReadDoubleTag(pTagAltitude, pTIFFHeader, bLittleEndian);
-		uint8* pTagAltitudeRef = FindTag(pGPSIFD, pLastGPS, 0x5, bLittleEndian);
+		uint8* pTagAltitudeRef = FindTag(pGPSIFD, pLastGPS, EXIF::TAG_GPS_ALTITUDE_REF, bLittleEndian);
 		if (pTagAltitudeRef != NULL && *(pTagAltitudeRef + 8) == 1) {
 			m_dAltitude *= -1;
 		}
@@ -533,4 +608,53 @@ GPSCoordinate* CEXIFReader::ReadGPSCoordinate(uint8* pTIFFHeader, uint8* pTagLat
 		return NULL;
 
 	return new GPSCoordinate(reference, dDeg, dMin, dSec);
+}
+
+
+double CEXIFReader::CalcFocalLengthEquiv(double focalLength) {
+	return EXIFHelpers::CalcFocalLengthEquivalent(m_sMake, m_sModel, focalLength);
+}
+
+// Print conversion for lens info
+// array [0..3] of rational values: (min focal, max focal, min F, max F)
+// returns: string in the form "12-20mm f/3.8-4.5" or "50mm f/1.4"
+
+CString CEXIFReader::GetLensInfo() {
+	CString focalRange;
+
+	bool isEmpty = true;
+	for (int i = 0; i < 4; i++) {
+		isEmpty = isEmpty && m_lensInfo[i].IsEmpty();
+	}
+	if (isEmpty) {
+		return _T("");
+	}
+
+	double minFocal = m_lensInfo[0];
+	double maxFocal = m_lensInfo[1];
+	if (abs(maxFocal - minFocal) < 1E-3) {
+		focalRange.Format(_T("%.0fmm"), minFocal);
+	}
+	else {
+		focalRange.Format(_T("%.0f-%.0fmm"), minFocal, maxFocal);
+	}
+
+	CString fNumberRange;
+	if (m_lensInfo[2].IsEmpty() && m_lensInfo[3].IsEmpty()) {
+		fNumberRange = _T("");
+	}
+	else {
+		double minFNumber = m_lensInfo[2];
+		double maxFNumber = m_lensInfo[3];
+		if (minFNumber == 0 && maxFNumber == 0) {
+			fNumberRange = _T("");
+		}
+		else if (abs(maxFNumber - minFNumber) < 1E-3) {
+			fNumberRange.Format(_T(" f/%.1f"), minFNumber);
+		}
+		else {
+			fNumberRange.Format(_T(" f/%.1f-%.1f"), minFNumber, maxFNumber);
+		}
+	}
+	return focalRange + fNumberRange;
 }
