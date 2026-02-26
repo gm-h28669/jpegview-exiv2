@@ -126,7 +126,7 @@ namespace EXIFHelpers {
 		{ "PANASONIC", "DMC-FZ200", 0.0, 5.6 },
 		{ "PANASONIC", "DMC-FZ300", 0.0, 5.6 },
 		{ "SONY", "DSC-RX100", 0.0, 2.7 },
-		{ "HUAWEI", "HMA-L29", 2.26, 11.947 },
+		{ "HUAWEI", "HMA-L29", 2.26, 7.522 },
 		{ "HUAWEI", "HMA-L29", 3.84, 6.771 },
 		{ "HUAWEI", "HMA-L29", 3.95, 13.671 },
 		{ "HUAWEI", "HMA-L29", 4.75, 5.684 },
