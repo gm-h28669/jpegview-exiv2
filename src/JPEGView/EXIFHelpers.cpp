@@ -130,6 +130,10 @@ namespace EXIFHelpers {
 		{ "HUAWEI", "HMA-L29", 3.84, 6.771 },
 		{ "HUAWEI", "HMA-L29", 3.95, 13.671 },
 		{ "HUAWEI", "HMA-L29", 4.75, 5.684 },
+		{ "XIAOMI", "XIAOMI 15T PRO/2506BPN68G", 1.91, 7.853 },
+		{ "XIAOMI", "XIAOMI 15T PRO/2506BPN68G", 2.59, 10.039 },
+		{ "XIAOMI", "XIAOMI 15T PRO/2506BPN68G", 6.45, 3.566 },
+		{ "XIAOMI", "XIAOMI 15T PRO/2506BPN68G", 17.27, 6.659 },
 	};
 
 	// crop map using std::map and std::vector
