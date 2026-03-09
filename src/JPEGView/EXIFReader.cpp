@@ -28,7 +28,7 @@ namespace EXIF {
 	constexpr uint16 TAG_ISO_SPEED_EXIF_V3 = 0x8833;  // EXIF 3.0 spec
 	constexpr uint16 TAG_USER_COMMENT = 0x9286;
 	constexpr uint16 TAG_XP_COMMENT = 0x9C9C;
-	constexpr uint16 TAG_FOCAL_LEN_35MM = 0xA405;
+	constexpr uint16 TAG_FOCAL_LENGHT_35MM = 0xA405;
 	constexpr uint16 TAG_LENS_MODEL = 0xA434;
 	constexpr uint16 TAG_LENS_INFO = 0xA432;
 
@@ -299,6 +299,18 @@ bool CEXIFReader::ParseDateString(SYSTEMTIME & date, const CString& str) {
 	return false;
 }
 
+// same info may be in IFD0 or EXIF group, search prio: first IFD0 then EXIF
+uint8* findTagInIFDs(uint8* pIFD0, uint8* pLastIFD0,
+	uint8* pEXIFIFD, uint8* pLastEXIF,
+	uint16 tagID, bool bLittleEndian) {
+
+	uint8* pTag = FindTag(pIFD0, pLastIFD0, tagID, bLittleEndian);
+	if (pTag == NULL && pEXIFIFD != NULL && pLastEXIF != NULL) {
+		pTag = FindTag(pEXIFIFD, pLastEXIF, tagID, bLittleEndian);
+	}
+	return pTag;
+}
+
 CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	: m_exposureTime{ 0, 0 },
 	m_acqDate{ 0 },
@@ -347,7 +359,8 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	if (pIFD0 - m_pApp1 >= nApp1Size) {
 		return;
 	}
-	// Read IFD0
+
+	// Get IFD0 group start and end pointer
 	uint16 nNumTags = ReadUShort(pIFD0, bLittleEndian);
 	pIFD0 += 2;
 	uint8* pLastIFD0 = pIFD0 + nNumTags*12;
@@ -356,6 +369,30 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	}
 	uint32 nOffsetIFD1 = ReadUInt(pLastIFD0, bLittleEndian);
 	m_pLastIFD0 = pLastIFD0;
+
+	// Get EXIF group start and end pointer
+	uint8* pTagEXIFIFD = FindTag(pIFD0, pLastIFD0, EXIF::TAG_EXIF_IFD, bLittleEndian);
+	bool existsExifGroup = (pTagEXIFIFD != NULL);
+
+	uint8* pEXIFIFD = NULL;
+	uint8* pLastEXIF = NULL;
+
+	if (existsExifGroup) {
+		uint32 nOffsetEXIF = ReadLongTag(pTagEXIFIFD, bLittleEndian);
+		if (nOffsetEXIF == 0) {
+			return;
+		}
+		pEXIFIFD = pTIFFHeader + nOffsetEXIF;
+		if (pEXIFIFD - m_pApp1 >= nApp1Size) {
+			return;
+		}
+		nNumTags = ReadUShort(pEXIFIFD, bLittleEndian);
+		pEXIFIFD += 2;
+		pLastEXIF = pEXIFIFD + nNumTags * 12;
+		if (pLastEXIF - m_pApp1 >= nApp1Size) {
+			return;
+		}
+	}
 
 	// image orientation
 	uint8* pTagOrientation = NULL;
@@ -399,37 +436,18 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	ReadStringTag(sModDate, pTagModDate, pTIFFHeader, bLittleEndian);
 	ParseDateString(m_dateTime, sModDate);
 
-	uint8* pTagEXIFIFD = FindTag(pIFD0, pLastIFD0, EXIF::TAG_EXIF_IFD, bLittleEndian);
-	if (pTagEXIFIFD == NULL) {
-		return;
-	}
-
 	uint8* pTagGPSIFD = FindTag(pIFD0, pLastIFD0, EXIF::TAG_GPS_IFD, bLittleEndian);
 	if (pTagGPSIFD != NULL) {
 		ReadGPSData(pTIFFHeader, pTagGPSIFD, nApp1Size, bLittleEndian);
 	}
 
-	// Read EXIF IFD
-	uint32 nOffsetEXIF = ReadLongTag(pTagEXIFIFD, bLittleEndian);
-	if (nOffsetEXIF == 0) {
-		return;
-	}
-	uint8* pEXIFIFD = pTIFFHeader + nOffsetEXIF;
-	if (pEXIFIFD - m_pApp1 >= nApp1Size) {
-		return;
-	}
-	nNumTags = ReadUShort(pEXIFIFD, bLittleEndian);
-	pEXIFIFD += 2;
-	uint8* pLastEXIF = pEXIFIFD + nNumTags*12;
-	if (pLastEXIF - m_pApp1 >= nApp1Size) {
-		return;
-	}
 	uint8* pTagAcquisitionDate = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_DATE_TIME_ORIGINAL, bLittleEndian);
 	CString sAcqDate;
 	ReadStringTag(sAcqDate, pTagAcquisitionDate, pTIFFHeader, bLittleEndian);
 	ParseDateString(m_acqDate, sAcqDate);
 
-	uint8* pTagExposureTime = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_EXPOSURE_TIME, bLittleEndian);
+	uint8* pTagExposureTime = findTagInIFDs(pIFD0, pLastIFD0, pEXIFIFD, pLastEXIF,
+		EXIF::TAG_EXPOSURE_TIME, bLittleEndian);
 	ReadRationalTag(m_exposureTime, pTagExposureTime, pTIFFHeader, bLittleEndian);
 
 	uint8* pTagExposureBias = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_EXPOSURE_BIAS, bLittleEndian);
@@ -440,13 +458,16 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	m_bFlashFired = (nFlash & 1) != 0;
 	m_bFlashFlagPresent = pTagFlash != NULL;
 
-	uint8* pTagFocalLength = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_FOCAL_LENGTH, bLittleEndian);
+	uint8* pTagFocalLength = findTagInIFDs(pIFD0, pLastIFD0, pEXIFIFD, pLastEXIF,
+		EXIF::TAG_FOCAL_LENGTH, bLittleEndian);
 	ReadRationalTag(m_focalLength, pTagFocalLength, pTIFFHeader, bLittleEndian);
 
-	uint8* pTagFNumber = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_F_NUMBER, bLittleEndian);
+	uint8* pTagFNumber = findTagInIFDs(pIFD0, pLastIFD0, pEXIFIFD, pLastEXIF,
+		EXIF::TAG_F_NUMBER, bLittleEndian);
 	m_dFNumber = ReadDoubleTag(pTagFNumber, pTIFFHeader, bLittleEndian);
 
-	uint8* pTagISOSpeed = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_ISO_SPEED_RATINGS, bLittleEndian);
+	uint8* pTagISOSpeed = findTagInIFDs(pIFD0, pLastIFD0, pEXIFIFD, pLastEXIF,
+		EXIF::TAG_ISO_SPEED_RATINGS, bLittleEndian);
 	uint8* pTagISOSpeed2 = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_ISO_SPEED_EXIF_V3, bLittleEndian);	// EXIF 3.0 spec
 
 	m_nISOSpeed = (pTagISOSpeed != NULL) ? ReadShortTag(pTagISOSpeed, bLittleEndian) :
@@ -459,7 +480,8 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 		m_sUserComment = "";
 	}
 
-	uint8* pTagFocalLengthEquivalent = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_FOCAL_LEN_35MM, bLittleEndian);
+	uint8* pTagFocalLengthEquivalent = findTagInIFDs(pIFD0, pLastIFD0, pEXIFIFD, pLastEXIF,
+		EXIF::TAG_FOCAL_LENGHT_35MM, bLittleEndian);
 	m_focalLengthEquivalent = ReadShortTag(pTagFocalLengthEquivalent, bLittleEndian);
 
 	uint8* pTagLensModel = FindTag(pEXIFIFD, pLastEXIF, EXIF::TAG_LENS_MODEL, bLittleEndian);
