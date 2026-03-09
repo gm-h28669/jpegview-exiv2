@@ -113,7 +113,7 @@ public:
 	int GetThumbnailHeight() { return m_nThumbHeight; }
 	// GPS information
 	bool IsGPSInformationPresent() { return m_pLatitude != NULL && m_pLongitude != NULL; }
-	bool IsGPSAltitudePresent() { return m_dAltitude != UNKNOWN_DOUBLE_VALUE; }
+	bool IsGPSAltitudePresent() { return m_dAltitude != UNKNOWN_DOUBLE_VALUE && m_dAltitude != 0.0; } // 0.0 usually indicates that device did not have altitude available at time of image taking
 	GPSCoordinate* GetGPSLatitude() { return m_pLatitude; }
 	GPSCoordinate* GetGPSLongitude() { return m_pLongitude; }
 	double GetGPSAltitude() { return m_dAltitude; }
