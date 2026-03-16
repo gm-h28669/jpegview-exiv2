@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="UserMacros">
+    <!-- exiv2 library name for all build configurations -->
+    <Exiv2Name>exiv2</Exiv2Name>
+    <!-- Define a macro that can be used in project files to reference package directories -->
+    <Exiv2Dir>$(MSBuildThisFileDirectory)</Exiv2Dir>
+  </PropertyGroup>
+</Project>

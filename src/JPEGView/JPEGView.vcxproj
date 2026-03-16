@@ -1,5 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\StoneSteps.Exiv2.VS2022.Static.0.28.3.1\build\native\StoneSteps.Exiv2.VS2022.Static.props" Condition="Exists('..\packages\StoneSteps.Exiv2.VS2022.Static.0.28.3.1\build\native\StoneSteps.Exiv2.VS2022.Static.props')" />
+  <Import Project="..\packages\StoneSteps.zLib.VS2022.Static.1.3.1.1\build\native\StoneSteps.zLib.VS2022.Static.props" Condition="Exists('..\packages\StoneSteps.zLib.VS2022.Static.1.3.1.1\build\native\StoneSteps.zLib.VS2022.Static.props')" />
+  <Import Project="..\packages\StoneSteps.Expat.VS2022.Static.2.6.3.1\build\native\StoneSteps.Expat.VS2022.Static.props" Condition="Exists('..\packages\StoneSteps.Expat.VS2022.Static.2.6.3.1\build\native\StoneSteps.Expat.VS2022.Static.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
@@ -72,7 +75,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>Async</ExceptionHandling>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
@@ -86,7 +89,7 @@
       <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>legacy_stdio_definitions.lib;legacy_stdio_wide_specifiers.lib;Dbghelp.lib;gdiplus.lib;WICLoader.lib;turbojpeg-static.lib;libpng16.lib;zlib.lib;jxl_dec.lib;jxl_threads.lib;heif.lib;libwebp.lib;libwebpdemux.lib;avif.lib;lcms2.lib;libraw.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>legacy_stdio_definitions.lib;legacy_stdio_wide_specifiers.lib;Dbghelp.lib;gdiplus.lib;WICLoader.lib;turbojpeg-static.lib;libpng16.lib;zlib.lib;jxl_dec.lib;jxl_threads.lib;heif.lib;libwebp.lib;libwebpdemux.lib;avif.lib;lcms2.lib;libraw.lib;Psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>bin\x64\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
@@ -121,7 +124,7 @@
       <PreprocessorDefinitions>WIN32;_WINDOWS;STRICT;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>false</StringPooling>
       <ExceptionHandling>Async</ExceptionHandling>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>
@@ -140,7 +143,7 @@
       <AdditionalIncludeDirectories>$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>legacy_stdio_definitions.lib;legacy_stdio_wide_specifiers.lib;gdiplus.lib;WICLoader.lib;turbojpeg-static.lib;libpng16.lib;zlib.lib;jxl_dec.lib;jxl_threads.lib;heif.lib;libwebp.lib;libwebpdemux.lib;avif.lib;lcms2.lib;libraw.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>legacy_stdio_definitions.lib;legacy_stdio_wide_specifiers.lib;gdiplus.lib;WICLoader.lib;turbojpeg-static.lib;libpng16.lib;zlib.lib;jxl_dec.lib;jxl_threads.lib;heif.lib;libwebp.lib;libwebpdemux.lib;avif.lib;lcms2.lib;libraw.lib;Psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>bin\x64\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
@@ -169,6 +172,10 @@
     <ClCompile Include="DirectoryWatcher.cpp" />
     <ClCompile Include="EXIFHelpers.cpp" />
     <ClCompile Include="EXIFReader.cpp" />
+    <ClCompile Include="Exiv2Parser.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="FileExtensionsDlg.cpp" />
     <ClCompile Include="FileExtensionsRegistry.cpp" />
     <ClCompile Include="FileList.cpp" />
@@ -258,6 +265,7 @@
     <ClInclude Include="DirectoryWatcher.h" />
     <ClInclude Include="EXIFHelpers.h" />
     <ClInclude Include="EXIFReader.h" />
+    <ClInclude Include="Exiv2Parser.h" />
     <ClInclude Include="FileExtensionsDlg.h" />
     <ClInclude Include="FileExtensionsRegistry.h" />
     <ClInclude Include="FileList.h" />
@@ -341,6 +349,7 @@
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="packages.config" />
     <None Include="res\JPEGView.ico" />
   </ItemGroup>
   <ItemGroup>
@@ -348,5 +357,19 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\StoneSteps.Expat.VS2022.Static.2.6.3.1\build\native\StoneSteps.Expat.VS2022.Static.targets" Condition="Exists('..\packages\StoneSteps.Expat.VS2022.Static.2.6.3.1\build\native\StoneSteps.Expat.VS2022.Static.targets')" />
+    <Import Project="..\packages\StoneSteps.zLib.VS2022.Static.1.3.1.1\build\native\StoneSteps.zLib.VS2022.Static.targets" Condition="Exists('..\packages\StoneSteps.zLib.VS2022.Static.1.3.1.1\build\native\StoneSteps.zLib.VS2022.Static.targets')" />
+    <Import Project="..\packages\StoneSteps.Exiv2.VS2022.Static.0.28.3.1\build\native\StoneSteps.Exiv2.VS2022.Static.targets" Condition="Exists('..\packages\StoneSteps.Exiv2.VS2022.Static.0.28.3.1\build\native\StoneSteps.Exiv2.VS2022.Static.targets')" />
   </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\StoneSteps.Expat.VS2022.Static.2.6.3.1\build\native\StoneSteps.Expat.VS2022.Static.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\StoneSteps.Expat.VS2022.Static.2.6.3.1\build\native\StoneSteps.Expat.VS2022.Static.props'))" />
+    <Error Condition="!Exists('..\packages\StoneSteps.Expat.VS2022.Static.2.6.3.1\build\native\StoneSteps.Expat.VS2022.Static.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\StoneSteps.Expat.VS2022.Static.2.6.3.1\build\native\StoneSteps.Expat.VS2022.Static.targets'))" />
+    <Error Condition="!Exists('..\packages\StoneSteps.zLib.VS2022.Static.1.3.1.1\build\native\StoneSteps.zLib.VS2022.Static.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\StoneSteps.zLib.VS2022.Static.1.3.1.1\build\native\StoneSteps.zLib.VS2022.Static.props'))" />
+    <Error Condition="!Exists('..\packages\StoneSteps.zLib.VS2022.Static.1.3.1.1\build\native\StoneSteps.zLib.VS2022.Static.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\StoneSteps.zLib.VS2022.Static.1.3.1.1\build\native\StoneSteps.zLib.VS2022.Static.targets'))" />
+    <Error Condition="!Exists('..\packages\StoneSteps.Exiv2.VS2022.Static.0.28.3.1\build\native\StoneSteps.Exiv2.VS2022.Static.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\StoneSteps.Exiv2.VS2022.Static.0.28.3.1\build\native\StoneSteps.Exiv2.VS2022.Static.props'))" />
+    <Error Condition="!Exists('..\packages\StoneSteps.Exiv2.VS2022.Static.0.28.3.1\build\native\StoneSteps.Exiv2.VS2022.Static.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\StoneSteps.Exiv2.VS2022.Static.0.28.3.1\build\native\StoneSteps.Exiv2.VS2022.Static.targets'))" />
+  </Target>
 </Project>

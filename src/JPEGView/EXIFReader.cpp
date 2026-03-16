@@ -3,6 +3,7 @@
 #include "ImageProcessingTypes.h"
 #include "Helpers.h"
 #include "EXIFHelpers.h"
+#include "Exiv2Parser.h"
 
 double CEXIFReader::UNKNOWN_DOUBLE_VALUE = 283740261.192864;
 
@@ -337,6 +338,10 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	m_focalLengthEquivalent = 0;
 
 	m_pApp1 = (uint8*)pApp1Block;
+	
+	// test call into Exiv2 lib
+	CString lensInfo = CString(Exiv2Parser::GetLensModel(m_pApp1).c_str());
+
 	// APP1 marker
 	if (m_pApp1[0] != 0xFF || m_pApp1[1] != 0xE1) {
 		return;
