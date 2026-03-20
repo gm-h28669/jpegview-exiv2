@@ -1235,7 +1235,7 @@ LRESULT CMainDlg::OnContextMenu(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM lParam,
 			::EnableMenuItem(hMenuModDate, IDM_TOUCH_IMAGE, MF_BYCOMMAND | MF_GRAYED);
 			::EnableMenuItem(hMenuModDate, IDM_TOUCH_IMAGE_EXIF, MF_BYCOMMAND | MF_GRAYED);
 		}
-		if (m_pCurrentImage->GetEXIFReader() == NULL || !m_pCurrentImage->GetEXIFReader()->GetAcquisitionTimePresent()) {
+		if (m_pCurrentImage->GetEXIFReader() == NULL || !m_pCurrentImage->GetEXIFReader()->HasDateTaken()) {
 			::EnableMenuItem(hMenuModDate, IDM_TOUCH_IMAGE_EXIF, MF_BYCOMMAND | MF_GRAYED);
 		}
 		int windowsVersion = Helpers::GetWindowsVersion();
@@ -2007,11 +2007,11 @@ void CMainDlg::ExecuteCommand(int nCommand) {
 				LPCTSTR strFileName = CurrentFileName(false);
 				bool bOk;
 				if (nCommand == IDM_TOUCH_IMAGE_EXIF) {
-					bOk = EXIFHelpers::SetModificationDateToEXIF(strFileName, m_pCurrentImage);
+					bOk = EXIFHelpers::SetFileModifiedDateToDateTaken(strFileName, m_pCurrentImage);
 				} else {
 					SYSTEMTIME st;
 					::GetSystemTime(&st);  // gets current time
-					bOk = EXIFHelpers::SetModificationDate(strFileName, st);
+					bOk = EXIFHelpers::SetFileModifiedDate(strFileName, st);
 				}
 				if (bOk) {
 					m_pFileList->ModificationTimeChanged();
@@ -2024,7 +2024,7 @@ void CMainDlg::ExecuteCommand(int nCommand) {
 		case IDM_TOUCH_IMAGE_EXIF_FOLDER:
 			if (m_pCurrentImage != NULL && m_pFileList->CurrentDirectory() != NULL) {
 				MouseOn();
-				EXIFHelpers::EXIFResult result = EXIFHelpers::SetModificationDateToEXIFAllFiles(m_pFileList->CurrentDirectory());
+				EXIFHelpers::EXIFResult result = EXIFHelpers::SetFileModifiedDateToDateTakenInAllFiles(m_pFileList->CurrentDirectory());
 				TCHAR buff1[128];
 				_stprintf_s(buff1, 128, CNLS::GetString(_T("Number of JPEG files in folder: %d")), result.NumberOfSucceededFiles + result.NumberOfFailedFiles);
 				TCHAR buff2[256];
@@ -3243,10 +3243,10 @@ void CMainDlg::UpdateWindowTitle() {
 		if (CSettingsProvider::This().ShowEXIFDateInTitle()) {
 			CEXIFReader* pEXIF = m_pCurrentImage->GetEXIFReader();
 			CRawMetadata* pRawMetadata = m_pCurrentImage->GetRawMetadata();
-			if (pEXIF != NULL && pEXIF->GetAcquisitionTime().wYear > 1600) {
-				sWindowText += " - " + Helpers::SystemTimeToString(pEXIF->GetAcquisitionTime());
-			} else if (pRawMetadata != NULL && pRawMetadata->GetAcquisitionTime().wYear > 1985) {
-				sWindowText += " - " + Helpers::SystemTimeToString(pRawMetadata->GetAcquisitionTime());
+			if (pEXIF != NULL && pEXIF->GetDateTaken().wYear > 1600) {
+				sWindowText += " - " + Helpers::SystemTimeToString(pEXIF->GetDateTaken());
+			} else if (pRawMetadata != NULL && pRawMetadata->HasDateTaken()) {
+				sWindowText += " - " + Helpers::SystemTimeToString(pRawMetadata->GetDateTaken());
 			}
 		}
 		sWindowText += " - " + CString(JPEGVIEW_TITLE);

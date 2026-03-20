@@ -14,6 +14,8 @@
 #define SHOW_COMPACT
 
 constexpr const TCHAR HIGHLIGHT_FONT[] = _T("\"Consolas\" 12.0 bold");
+constexpr const TCHAR ITEM_SEPARATOR[] = _T(" • ");
+constexpr const int SPLIT_LINE_LENGTH = 30;
 
 static int GetFileNameHeight(HDC dc) {
 	CSize size;
@@ -22,22 +24,22 @@ static int GetFileNameHeight(HDC dc) {
 	return size.cy;
 }
 
-static CString CreateGPSString(GPSCoordinate* latitude, GPSCoordinate* longitude) {
+static CString FormatGeoCoordinates(GPSCoordinate* latitude, GPSCoordinate* longitude) {
 	const int BUFF_SIZE = 96;
 	TCHAR buff[BUFF_SIZE];
 	_stprintf_s(buff, BUFF_SIZE, _T("%.0f° %.0f' %.0f'' %s / %.0f° %.0f' %.0f'' %s"),
-		latitude->Degrees, latitude->Minutes, latitude->Seconds, latitude->GetReference(),
-		longitude->Degrees, longitude->Minutes, longitude->Seconds, longitude->GetReference());
+		latitude->Degrees, latitude->Minutes, latitude->Seconds, latitude->RelativePos,
+		longitude->Degrees, longitude->Minutes, longitude->Seconds, longitude->RelativePos);
 	return CString(buff);
 }
 
-static CString CreateGPSURL(GPSCoordinate* latitude, GPSCoordinate* longitude) {
+static CString GenerateMapURL(GPSCoordinate* latitude, GPSCoordinate* longitude) {
 	double lng = longitude->Degrees + longitude->Minutes / 60 + longitude->Seconds / (60 * 60);
-	if (_tcsicmp(longitude->GetReference(), _T("W")) == 0)
+	if (_tcsicmp(longitude->RelativePos, _T("W")) == 0)
 		lng = -lng;
 
 	double lat = latitude->Degrees + latitude->Minutes / 60 + latitude->Seconds / (60 * 60);
-	if (_tcsicmp(latitude->GetReference(), _T("S")) == 0)
+	if (_tcsicmp(latitude->RelativePos, _T("S")) == 0)
 		lat = -lat;
 
 	CString mapProvider = CSettingsProvider::This().GPSMapProvider();
@@ -54,350 +56,457 @@ static CString CreateGPSURL(GPSCoordinate* latitude, GPSCoordinate* longitude) {
 	return mapProvider;
 }
 
-CEXIFDisplayCtl::CEXIFDisplayCtl(CMainDlg* pMainDlg, CPanel* pImageProcPanel) : CPanelController(pMainDlg, false) {
-	m_bVisible = CSettingsProvider::This().ShowFileInfo();
-	m_nFileNameHeight = 0;
-	m_pImageProcPanel = pImageProcPanel;
-	m_pPanel = m_pEXIFDisplay = new CEXIFDisplay(pMainDlg->m_hWnd, this);
-	m_pEXIFDisplay->GetControl<CButtonCtrl*>(CEXIFDisplay::ID_btnShowHideHistogram)->SetButtonPressedHandler(&OnShowHistogram, this);
-	CButtonCtrl* pCloseBtn = m_pEXIFDisplay->GetControl<CButtonCtrl*>(CEXIFDisplay::ID_btnClose);
+static bool IsEmpty(LPCTSTR comment) {
+	if (comment == NULL || comment[0] == _T('\0') ||
+		(std::basic_string<TCHAR>(comment).find_first_not_of(_T(" \t\n\r\f\v")) == std::basic_string<TCHAR>::npos)) {
+		return true;  // The comment is considered empty
+	}
+	return false; // The comment has content
+}
+
+static CString JoinWithSeparator(const std::vector<CString>& strings, const CString& separator) {
+	CString result;
+
+	for (size_t i = 0; i < strings.size(); ++i) {
+		if (!strings[i].IsEmpty()) {
+			if (!result.IsEmpty()) {
+				result += separator; // Add the separator before the next string
+			}
+			result += strings[i]; // Add the current non-empty string
+		}
+	}
+
+	return result;
+}
+
+static CString GetFullCameraName (CString& make, CString& model) {
+	if (make.IsEmpty()) {
+		return model;
+	}
+	return make + _T(" ") + model;
+}
+
+CEXIFDisplayCtl::CEXIFDisplayCtl(CMainDlg* mainDlg, CPanel* imageProcessingPanel) : CPanelController(mainDlg, false) {
+	_visible = CSettingsProvider::This().ShowFileInfo();
+	_fileNameHeight = 0;
+	_imageProcessingPanel = imageProcessingPanel;
+	m_pPanel = _exifDisplay = new CEXIFDisplay(mainDlg->m_hWnd, this);
+	_exifDisplay->GetControl<CButtonCtrl*>(CEXIFDisplay::ID_btnShowHideHistogram)->SetButtonPressedHandler(&OnShowHistogram, this);
+	CButtonCtrl* pCloseBtn = _exifDisplay->GetControl<CButtonCtrl*>(CEXIFDisplay::ID_btnClose);
 	pCloseBtn->SetButtonPressedHandler(&OnClose, this);
 	pCloseBtn->SetShow(false);
-	m_pEXIFDisplay->SetShowHistogram(CSettingsProvider::This().ShowHistogram());
+	_exifDisplay->SetShowHistogram(CSettingsProvider::This().ShowHistogram());
 }
 
 CEXIFDisplayCtl::~CEXIFDisplayCtl() {
-	delete m_pEXIFDisplay;
-	m_pEXIFDisplay = NULL;
+	delete _exifDisplay;
+	_exifDisplay = NULL;
 }
 
 bool CEXIFDisplayCtl::IsVisible() { 
-	return CurrentImage() != NULL && m_bVisible; 
+	return CurrentImage() != NULL && _visible; 
 }
 
-void CEXIFDisplayCtl::SetVisible(bool bVisible) {
-	if (m_bVisible != bVisible) {
-		m_bVisible = bVisible;
+void CEXIFDisplayCtl::SetVisible(bool visible) {
+	if (_visible != visible) {
+		_visible = visible;
 		InvalidateMainDlg();
 	}
 }
 
-void CEXIFDisplayCtl::SetActive(bool bActive) {
-	SetVisible(bActive);
+void CEXIFDisplayCtl::SetActive(bool active) {
+	SetVisible(active);
 }
 
 void CEXIFDisplayCtl::AfterNewImageLoaded() {
-	m_pEXIFDisplay->ClearTexts();
-	m_pEXIFDisplay->SetHistogram(NULL);
+	_exifDisplay->ClearTexts();
+	_exifDisplay->SetHistogram(NULL);
 }
 
 void CEXIFDisplayCtl::OnPrePaintMainDlg(HDC hPaintDC) {
-	if (m_pMainDlg->IsShowFileName() && m_nFileNameHeight == 0) {
-		m_nFileNameHeight = GetFileNameHeight(hPaintDC);
+	if (m_pMainDlg->IsShowFileName() && _fileNameHeight == 0) {
+		_fileNameHeight = GetFileNameHeight(hPaintDC);
 	}
-	m_pEXIFDisplay->SetPosition(CPoint(m_pImageProcPanel->PanelRect().left, m_pMainDlg->IsShowFileName() ? m_nFileNameHeight + 6 : 0));
+	_exifDisplay->SetPosition(CPoint(_imageProcessingPanel->PanelRect().left, m_pMainDlg->IsShowFileName() ? _fileNameHeight + 6 : 0));
 	FillEXIFDataDisplay();
-	if (CurrentImage() != NULL && m_pEXIFDisplay->GetShowHistogram()) {
-		m_pEXIFDisplay->SetHistogram(CurrentImage()->GetProcessedHistogram());
+	if (CurrentImage() != NULL && _exifDisplay->GetShowHistogram()) {
+		_exifDisplay->SetHistogram(CurrentImage()->GetProcessedHistogram());
+	}
+}
+
+void CEXIFDisplayCtl::DisplayImageSizeInfo(int width, int height) {
+	double megaPixels = (static_cast<double>(width) * height) / 1'000'000.0;
+	_exifDisplay->AddLine(_T("%sMP%s%sx%s"),
+		_T(""),
+		_exifDisplay->FormatNumber(megaPixels, 1),
+		ITEM_SEPARATOR,
+		_exifDisplay->FormatNumber(static_cast<double>(width), 0),
+		_exifDisplay->FormatNumber(static_cast<double>(height), 0));
+}
+
+void CEXIFDisplayCtl::DisplayDateTakenOrLastModifiedTime(bool hasDateTaken, SYSTEMTIME dateTaken, const FILETIME* pFileModifiedTime) {
+	if (hasDateTaken) {
+		_exifDisplay->AddLine(CNLS::GetString(_T("Acquisition date:")), dateTaken);
+	}
+	else {
+		if (pFileModifiedTime != NULL) {
+			_exifDisplay->AddLine(CNLS::GetString(_T("Modification date:")), *pFileModifiedTime);
+		}
+	}
+}
+
+void CEXIFDisplayCtl::DisplayLocationInfo(GPSCoordinate* latitude, GPSCoordinate* longitude, bool hasAltitude, double altitude, 
+	LPCTSTR descriptionLocation, LPCTSTR descricptionAltitude, bool useBoldFont) {
+	CString gpsLocation = FormatGeoCoordinates(latitude, longitude);
+	_exifDisplay->SetGPSLocation(gpsLocation, GenerateMapURL(latitude, longitude), useBoldFont);
+	_exifDisplay->AddLine(descriptionLocation, gpsLocation, true);
+
+	if (hasAltitude) {
+		CString sAltitude = _exifDisplay->FormatNumber(altitude, 0);
+		if (useBoldFont) {
+			_exifDisplay->AddFont(HIGHLIGHT_FONT);
+		}
+		_exifDisplay->AddLine(_T("↑ %sm"), descricptionAltitude, sAltitude);
 	}
 }
 
 void CEXIFDisplayCtl::FillEXIFDataDisplay() {
-	m_pEXIFDisplay->ClearTexts();
+	_exifDisplay->ClearTexts();
+	_exifDisplay->SetHistogram(NULL);
 
-	m_pEXIFDisplay->SetHistogram(NULL);
-
-	CString sPrefix, sFileTitle;
-	const CFileList* pFileList = m_pMainDlg->GetFileList();
+	CString prefix, fileTitle;
+	const CFileList* fileList = m_pMainDlg->GetFileList();
 
 #ifdef SHOW_FILENAME
 	// show filename and file index (if option "Show Filename" is enabled this is duplicate info)
-	LPCTSTR sCurrentFileName = m_pMainDlg->CurrentFileName(true);
+	LPCTSTR currentFileName = m_pMainDlg->CurrentFileName(true);
 
 	if (CurrentImage()->IsClipboardImage()) {
-		sPrefix = sCurrentFileName;
-	} else if (pFileList->Current() != NULL) {
-		sPrefix.Format(_T("[%d/%d]"), pFileList->CurrentIndex() + 1, pFileList->Size());
-		sFileTitle = sCurrentFileName;
-		sFileTitle += Helpers::GetMultiframeIndex(m_pMainDlg->GetCurrentImage());
+		prefix = currentFileName;
+	} else if (fileList->Current() != NULL) {
+		prefix.Format(_T("[%d/%d]"), fileList->CurrentIndex() + 1, fileList->Size());
+		fileTitle = currentFileName;
+		fileTitle += Helpers::GetMultiframeIndex(m_pMainDlg->GetCurrentImage());
 	}
 #endif
 
-	LPCTSTR sComment = NULL;
-	m_pEXIFDisplay->AddPrefix(sPrefix);
-	m_pEXIFDisplay->AddTitle(sFileTitle);
-
-#ifndef SHOW_COMPACT
-	m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Image width:")), CurrentImage()->OrigWidth());
-	m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Image height:")), CurrentImage()->OrigHeight());
-#endif
+	LPCTSTR comment = NULL;
+	_exifDisplay->AddPrefix(prefix);
+	_exifDisplay->AddTitle(fileTitle);
 
 	if (!CurrentImage()->IsClipboardImage()) {
-		CEXIFReader* pEXIFReader = CurrentImage()->GetEXIFReader();
-		CRawMetadata* pRawMetaData = CurrentImage()->GetRawMetadata();
-		if (pEXIFReader != NULL) {
-			sComment = pEXIFReader->GetUserComment();
-			if (sComment == NULL || sComment[0] == 0 || ((std::wstring)sComment).find_first_not_of(L" \t\n\r\f\v", 0) == std::wstring::npos) {
-				sComment = pEXIFReader->GetImageDescription();
+		CEXIFReader* exifReader = CurrentImage()->GetEXIFReader();
+		CRawMetadata* rawMeta = CurrentImage()->GetRawMetadata();
+		if (exifReader != NULL) {
+			if (exifReader->HasUserComment()) {
+				comment = exifReader->GetUserComment();
+			}
+			else if (exifReader->HasDescription()) {
+				comment = exifReader->GetDescription();
 			}
 
 #ifdef SHOW_COMPACT
+			_exifDisplay->AddFont(HIGHLIGHT_FONT);
+
 			// display date taken (if missing display last modified time)
-			m_pEXIFDisplay->AddFont(HIGHLIGHT_FONT);
-			if (pEXIFReader->GetAcquisitionTimePresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), pEXIFReader->GetAcquisitionTime());
+			if (exifReader->HasDateTaken()) {
+				_exifDisplay->AddLine(_T(""), exifReader->GetDateTaken());
 			}
 			else {
-				const FILETIME* pFileTime = pFileList->CurrentModificationTime();
-				if (pFileTime != NULL) {
-					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), *pFileTime);
+				const FILETIME* fileDateTime = fileList->CurrentModificationTime();
+				if (fileDateTime != NULL) {
+					_exifDisplay->AddLine(_T(""), *fileDateTime);
 				}
 			}
 
 			// show exposure time, aperture, ISO speed, exposure bias, focal length, 35mm focal length equivalent and 
 			// flash indication in one line
-			CString sExposureTime = pEXIFReader->GetExposureTimePresent()
-				? m_pEXIFDisplay->FormatNumber(pEXIFReader->GetExposureTime()) : _T("");
+			CString exposureTime = exifReader->HasExposureTime()
+				? CString(_exifDisplay->FormatNumber(exifReader->GetExposureTime())) + _T("s") : _T("");
+			CString aperture = (exifReader->HasApertureValue())
+				? _T("f/") + CString(_exifDisplay->FormatNumber(exifReader->GetApertureValue(), 1)) : _T("");
+			CString isoSpeed = exifReader->HasISOSpeed()
+				? _T("ISO ") + CString(_exifDisplay->FormatNumber(exifReader->GetISOSpeed())) : _T("");
+			CString exposureBias = exifReader->HasExposureBias()
+				? _T("EV") + CString(_exifDisplay->FormatNumber(exifReader->HasExposureBias(), 1, true)) : _T("");
+			CString focalLength = exifReader->HasFocalLength()
+				? _exifDisplay->FormatNumber(exifReader->GetFocalLength()) : _T("");
+			double focalLengthEquivalent = GetFocalLenghtEquiv(exifReader);
+			if (focalLengthEquivalent > 0.0) {
+				focalLength += _T("➞") + CString(_exifDisplay->FormatNumber(focalLengthEquivalent)) + _T("mm");
+			}
+			else if (exifReader->HasFocalLength()) {
+				focalLength += _T("mm");
+			}
+			CString flashFired = exifReader->GetFlashFired() ? _T("⚡") : _T("");
 
-			CString sFNumber = (pEXIFReader->GetFNumberPresent())
-				? m_pEXIFDisplay->FormatNumber(pEXIFReader->GetFNumber(), 1) : _T("");
-
-			CString sISOSpeed = pEXIFReader->GetISOSpeedPresent()
-				? m_pEXIFDisplay->FormatNumber(pEXIFReader->GetISOSpeed()) : _T("");
-
-			CString sFocalLength = pEXIFReader->GetFocalLengthPresent()
-				? m_pEXIFDisplay->FormatNumber(pEXIFReader->GetFocalLength()) : _T("");
-
-			double focalLengthEquiv = GetFocalLenghtEquiv(pEXIFReader);
-			CString sFocalLengthEquiv = focalLengthEquiv > 0.0
-				? _T("➞") + CString(m_pEXIFDisplay->FormatNumber(focalLengthEquiv)) : _T("");
-
-			double exposureBias = pEXIFReader->GetExposureBiasPresent()
-				? pEXIFReader->GetExposureBias() : 0.0;
-			CString sExposureBias = exposureBias != 0.0
-				? _T(" EV") + CString(m_pEXIFDisplay->FormatNumber(exposureBias, 1, true)) + _T(" •") : _T("");
-
-			CString sFlashFired = pEXIFReader->GetFlashFiredPresent() && pEXIFReader->GetFlashFired() ? _T("⚡") : _T("");
-
-			CString exposureInfoFormat = _T("%ss • f/%s • ISO %s •%s %s%smm %s");
-			m_pEXIFDisplay->AddLine(exposureInfoFormat, _T(""), sExposureTime, sFNumber, sISOSpeed, sExposureBias, sFocalLength, sFocalLengthEquiv, sFlashFired);
-			m_pEXIFDisplay->AddFont(CSettingsProvider::This().DefaultGUIFont());
-
-			// show camera make, camera model and lens info in one line
-			CString sCameraModel = pEXIFReader->GetCameraModelPresent()
-				? pEXIFReader->GetCameraModel() : _T("");
-
-			CString sLensInfo = !pEXIFReader->GetLensInfo().IsEmpty()
-				? _T(" • ") + pEXIFReader->GetLensInfo() : _T("");
-			
-			if (!sCameraModel.IsEmpty()) {
-				CString cameraInfoFormat = _T("%s%s");
-				m_pEXIFDisplay->AddLine(cameraInfoFormat, _T(""), sCameraModel, sLensInfo);
+			std::vector<CString> parts = { exposureTime, aperture, isoSpeed, exposureBias, focalLength, flashFired };
+			CString result = JoinWithSeparator(parts, ITEM_SEPARATOR);
+			if (!result.IsEmpty()) {
+				_exifDisplay->AddLine(_T("%s"), _T(""), result);
 			}
 
-			// display image size: widthx height and size in Megapixels
-			int width = CurrentImage()->OrigWidth();
-			int height = CurrentImage()->OrigHeight();
-			double megaPixels = (double)(width * height) / 1000000.0;
+			// display image size: width x height and size in Megapixels
+			int imgWidth = CurrentImage()->OrigWidth();
+			int imgHeight = CurrentImage()->OrigHeight();
+			DisplayImageSizeInfo(imgWidth, imgHeight);
+			_exifDisplay->AddEmptyLine();
 
-			TCHAR* sWidth; TCHAR* sHeight; TCHAR* sMegaPixels;
-			sWidth = m_pEXIFDisplay->FormatNumber(width);
-			sHeight = m_pEXIFDisplay->FormatNumber(height);
-			sMegaPixels = m_pEXIFDisplay->FormatNumber(megaPixels, 1);
-			m_pEXIFDisplay->AddLine(_T("%sMP • %sx%s"), CNLS::GetString(_T("")), sMegaPixels, sWidth, sHeight);
+			// get camera make and model
+			CString make = exifReader->GetMake();
+			CString model = exifReader->GetModel();
+			CString camera = GetFullCameraName(make, model);
 
-			if (pEXIFReader->IsGPSInformationPresent()) {
-				m_pEXIFDisplay->AddEmptyLine();
-				CString sGPSLocation = CreateGPSString(pEXIFReader->GetGPSLatitude(), pEXIFReader->GetGPSLongitude());
-				m_pEXIFDisplay->SetGPSLocation(sGPSLocation, CreateGPSURL(pEXIFReader->GetGPSLatitude(), pEXIFReader->GetGPSLongitude()));
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), sGPSLocation, true);
-				if (pEXIFReader->IsGPSAltitudePresent()) {
-					CString sAltitude = m_pEXIFDisplay->FormatNumber(pEXIFReader->GetGPSAltitude(), 0);
-					m_pEXIFDisplay->AddLine(_T("Alt: %sm"), CNLS::GetString(_T("")), sAltitude);
+			// get lens name: try to get it from Exiv2, if not found then use lens info to build
+			// a suitable string
+			CString lens = exifReader->HasLensName()
+				? exifReader->GetLensName() : _T("");
+
+			// if no lens name then use lens info if available
+			// lens info contains information about zoom range and min/max aperture
+			if (lens.IsEmpty()) {
+				lens = exifReader->HasLensInfo()
+					? exifReader->GetLensInfo() : _T("");
+			}
+
+			if ((camera.GetLength() + lens.GetLength()) < SPLIT_LINE_LENGTH) {
+				// show camera name and lens name on one line
+				parts = { camera, lens };
+				result = JoinWithSeparator(parts, ITEM_SEPARATOR);
+				if (!result.IsEmpty()) {
+					_exifDisplay->AddLine(_T("%s"), _T(""), result);
 				}
+			}
+			else {
+				// show camera name and lens name on separate lines
+				_exifDisplay->AddLine(_T("%s"), _T(""), camera);
+				_exifDisplay->AddLine(_T("%s"), _T(""), lens);
+			}
+
+			// display GPS location if available and also as a URL to open the location in a map application (Google Maps, Bing Maps, etc. depending on user settings)
+			if (exifReader->HasGPSLocation()) {
+				GPSCoordinate* latitude = exifReader->GetGPSLatitude();
+				GPSCoordinate* longitude = exifReader->GetGPSLongitude();
+				bool hasAltidue = exifReader->HasAltitude();
+				double altitude = hasAltidue ? exifReader->GetGPSAltitude() : 0.0;
+				DisplayLocationInfo(latitude, longitude, hasAltidue, altitude, _T(""), _T(""), true);
 			}
 #else
-			if (pEXIFReader->GetCameraModelPresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Camera model:")), pEXIFReader->GetCameraModel());
+			// display date taken (if missing display last modified time)
+			bool hasDateTaken = exifReader->HasDateTaken();
+			SYSTEMTIME dateTaken = exifReader->GetDateTaken();
+			const FILETIME * pFileModifiedTime = fileList->CurrentModificationTime();
+			DisplayDateTakenOrLastModifiedTime(hasDateTaken, dateTaken, pFileModifiedTime);
+
+			// display basic exposure information
+			if (exifReader->HasExposureTime()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("Exposure time (s):")), exifReader->GetExposureTime());
 			}
-			if (pEXIFReader->GetExposureTimePresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Exposure time (s):")), pEXIFReader->GetExposureTime());
+			if (exifReader->HasApertureValue()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("F-Number:")), exifReader->GetApertureValue(), 1);
 			}
-			if (pEXIFReader->GetExposureBiasPresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Exposure bias (EV):")), pEXIFReader->GetExposureBias(), 2);
+			if (exifReader->HasISOSpeed()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("ISO Speed:")), (int)exifReader->GetISOSpeed());
+			}			
+			if (exifReader->HasExposureBias()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("Exposure bias (EV):")), exifReader->GetExposureBias(), 2);
 			}
-			if (pEXIFReader->GetFlashFiredPresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Flash fired:")), pEXIFReader->GetFlashFired() ? CNLS::GetString(_T("yes")) : CNLS::GetString(_T("no")));
+			if (exifReader->HasFocalLength()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("Focal length (mm):")), exifReader->GetFocalLength(), 1);
 			}
-			if (pEXIFReader->GetFocalLengthPresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Focal length (mm):")), pEXIFReader->GetFocalLength(), 1);
+			double focalLengthEquivalent = GetFocalLenghtEquiv(exifReader);
+			if (focalLengthEquivalent > 0.0) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("35mm Eq. focal length (mm):")), focalLengthEquivalent, 1);
 			}
-			if (pEXIFReader->GetFNumberPresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("F-Number:")), pEXIFReader->GetFNumber(), 1);
-			}
-			if (pEXIFReader->GetISOSpeedPresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("ISO Speed:")), (int)pEXIFReader->GetISOSpeed());
-			}
-			if (pEXIFReader->GetSoftwarePresent()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Software:")), pEXIFReader->GetSoftware());
+			if (exifReader->GetFlashFired()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("Flash fired:")), exifReader->GetFlashFired() ? CNLS::GetString(_T("yes")) : CNLS::GetString(_T("no")));
 			}
 
-			if (pEXIFReader->IsGPSInformationPresent()) {
-				CString sGPSLocation = CreateGPSString(pEXIFReader->GetGPSLatitude(), pEXIFReader->GetGPSLongitude());
-				m_pEXIFDisplay->SetGPSLocation(sGPSLocation, CreateGPSURL(pEXIFReader->GetGPSLatitude(), pEXIFReader->GetGPSLongitude()));
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Location:")), sGPSLocation, true);
-				if (pEXIFReader->IsGPSAltitudePresent()) {
-					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Altitude (m):")), pEXIFReader->GetGPSAltitude(), 0);
-				}
+			// display image size
+			_exifDisplay->AddLine(CNLS::GetString(_T("Image width:")), CurrentImage()->OrigWidth());
+			_exifDisplay->AddLine(CNLS::GetString(_T("Image height:")), CurrentImage()->OrigHeight());
+
+			// display camera name
+			CString make = exifReader->GetMake();
+			CString model = exifReader->GetModel();
+			CString camera = GetFullCameraName(make, model);
+			if (!camera.IsEmpty()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("Camera model:")), camera);
+			}
+
+			// display software used for creating or editing
+			if (exifReader->HasSoftware()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("Software:")), exifReader->GetSoftware());
+			}
+
+			// display GPS location if available
+			if (exifReader->HasGPSLocation()) {
+				GPSCoordinate* latitude = exifReader->GetGPSLatitude();
+				GPSCoordinate* longitude = exifReader->GetGPSLongitude();
+				bool hasAltidue = exifReader->HasAltitude();
+				double altitude = hasAltidue ? exifReader->GetGPSAltitude() : 0.0;
+				DisplayLocationInfo(latitude, longitude, hasAltidue, altitude, 
+					CNLS::GetString(_T("Location:")), CNLS::GetString(_T("Altitude (m):")));
 			}
 #endif
 		}
-		else if (pRawMetaData != NULL) {
+		else if (rawMeta != NULL) {
 #ifdef SHOW_COMPACT
-			m_pEXIFDisplay->AddFont(HIGHLIGHT_FONT);
+			_exifDisplay->AddFont(HIGHLIGHT_FONT);
+
 			// display date taken (if missing display last modified time)
-			if (pRawMetaData->GetAcquisitionTime().wYear > 1985) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), pRawMetaData->GetAcquisitionTime());
+			if (rawMeta->HasDateTaken()) {
+				_exifDisplay->AddLine(_T(""), rawMeta->GetDateTaken());
 			}
 			else {
-				const FILETIME* pFileTime = pFileList->CurrentModificationTime();
-				if (pFileTime != NULL) {
-					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), *pFileTime);
+				const FILETIME* fileDateTime = fileList->CurrentModificationTime();
+				if (fileDateTime != NULL) {
+					_exifDisplay->AddLine(_T(""), *fileDateTime);
 				}
 			}
 
-			// show exposure time, aperture, ISO speed, focal length, and flash indication in one line
-			double exposureTime = pRawMetaData->GetExposureTime();
-			Rational rational = (exposureTime < 1.0) 
-				? Rational(1, Helpers::RoundToInt(1.0 / exposureTime)) : Rational(Helpers::RoundToInt(exposureTime), 1);
-			CString sExposureTime = pRawMetaData->GetExposureTime() > 0.0
-				? m_pEXIFDisplay->FormatNumber(rational) : _T("");
+			// show main shooting inforamtion in one line: exposure time, aperture, ISO speed, focal length, flash indication
+			Rational exposureTimeAsRatio;
+			if (rawMeta->HasExposureTime()) {
+				double exposureTime = rawMeta->GetExposureTime();
+				exposureTimeAsRatio = (exposureTime < 1.0)
+					? Rational(1, Helpers::RoundToInt(1.0 / exposureTime)) : Rational(Helpers::RoundToInt(exposureTime), 1);
+			}
+			CString shutterSpeed = rawMeta->HasExposureTime()
+				? CString(_exifDisplay->FormatNumber(exposureTimeAsRatio)) + _T("s") : _T("");
+			CString aperture = (rawMeta->HasApertureValue())
+				? _T("f/") + CString(_exifDisplay->FormatNumber(rawMeta->GetApertureValue(), 1)) : _T("");
+			CString isoSpeed = rawMeta->HasISOSpeed()
+				? _T("ISO ") + CString(_exifDisplay->FormatNumber(rawMeta->GetISOSpeed())) : _T("");
+			CString focalLength = rawMeta->HasFocalLength()
+				? CString(_exifDisplay->FormatNumber(rawMeta->GetFocalLength())) + _T("mm") : _T("");
+			CString flashFired = rawMeta->GetFlashFired() ? _T("⚡") : _T("");
 
-			CString sFNumber = pRawMetaData->GetAperture() > 0.0
-				? m_pEXIFDisplay->FormatNumber(pRawMetaData->GetAperture(), 1) : _T("");
-
-			CString sISOSpeed = pRawMetaData->GetIsoSpeed() > 0.0
-				? m_pEXIFDisplay->FormatNumber(pRawMetaData->GetIsoSpeed()) : _T("");
-
-			CString sFocalLength = pRawMetaData->GetFocalLength() > 0.0
-				? m_pEXIFDisplay->FormatNumber(pRawMetaData->GetFocalLength(), 1) : _T("");
-
-			CString sFlashFired = pRawMetaData->IsFlashFired() ? _T("⚡") : _T("");
-
-			CString cameraInfoFormat = _T("%ss • f/%s • ISO %s • %smm %s");
-			m_pEXIFDisplay->AddLine(cameraInfoFormat, _T(""), sExposureTime, sFNumber, sISOSpeed, sFocalLength, sFlashFired);
-			m_pEXIFDisplay->AddFont(CSettingsProvider::This().DefaultGUIFont());
-
-			if (pRawMetaData->GetManufacturer()[0] != 0) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), CString(pRawMetaData->GetManufacturer()) + _T(" ") + pRawMetaData->GetModel());
+			std::vector<CString> parts = { shutterSpeed, aperture, isoSpeed, focalLength, flashFired };
+			CString result = JoinWithSeparator(parts, ITEM_SEPARATOR);
+			if (!result.IsEmpty()) {
+				_exifDisplay->AddLine(_T("%s"), _T(""), result);
 			}
 
-			// display image size: widthx height and size in Megapixels
-			int width = pRawMetaData->GetWidth();
-			int height = pRawMetaData->GetHeight();
-			double megaPixels = (double)(width * height) / 1000000.0;
+			// display image size: width x height and size in Megapixels
+			int imgWidth = rawMeta->GetWidth();
+			int imgHeight = rawMeta->GetHeight();
+			double imgMegaPixels = (double)(imgWidth * imgHeight) / 1000000.0;
+			DisplayImageSizeInfo(imgWidth, imgHeight);
+			_exifDisplay->AddEmptyLine();
 
-			TCHAR* sWidth; TCHAR* sHeight; TCHAR* sMegaPixels;
-			sWidth = m_pEXIFDisplay->FormatNumber(width);
-			sHeight = m_pEXIFDisplay->FormatNumber(height);
-			sMegaPixels = m_pEXIFDisplay->FormatNumber(megaPixels, 1);
-			m_pEXIFDisplay->AddLine(_T("%sMP • %sx%s"), CNLS::GetString(_T("")), sMegaPixels, sWidth, sHeight);
+			// show camera name
+			CString make = rawMeta->GetMake();
+			CString model = rawMeta->GetModel();
+			CString camera = GetFullCameraName(make, model);
+			_exifDisplay->AddLine(_T("%s"), _T(""), camera);
 
-			if (pRawMetaData->IsGPSInformationPresent()) {
-				m_pEXIFDisplay->AddEmptyLine();
-				CString sGPSLocation = CreateGPSString(pRawMetaData->GetGPSLatitude(), pRawMetaData->GetGPSLongitude());
-				m_pEXIFDisplay->SetGPSLocation(sGPSLocation, CreateGPSURL(pRawMetaData->GetGPSLatitude(), pRawMetaData->GetGPSLongitude()));
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("")), sGPSLocation, true);
-				if (pRawMetaData->IsGPSAltitudePresent()) {
-					CString sAltitude = m_pEXIFDisplay->FormatNumber(pRawMetaData->GetGPSAltitude(), 0);
-					m_pEXIFDisplay->AddLine(_T("Alt: %sm"), CNLS::GetString(_T("")), sAltitude);
-				}
+			// display GPS location if available and also as a URL to open the location in a map application (Google Maps, Bing Maps, etc. depending on user settings)
+			if (rawMeta->HasGPSLocation()) {
+				GPSCoordinate* latitude = rawMeta->GetGPSLatitude();
+				GPSCoordinate* longitude = rawMeta->GetGPSLongitude();
+				bool hasAltidue = rawMeta->HasAltitude();
+				double altitude = hasAltidue ? rawMeta->GetGPSAltitude() : 0.0;
+
+				DisplayLocationInfo(latitude, longitude, hasAltidue, altitude, _T(""), _T(""), true);
 			}
 #else
-			if (pRawMetaData->GetAcquisitionTime().wYear > 1985) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Acquisition date:")), pRawMetaData->GetAcquisitionTime());
+			// display date taken (if missing display last modified time)
+			bool hasDateTaken = rawMeta->HasDateTaken();
+			SYSTEMTIME dateTaken = rawMeta->GetDateTaken();
+			const FILETIME* pFileModifiedTime = fileList->CurrentModificationTime();
+			DisplayDateTakenOrLastModifiedTime(hasDateTaken, dateTaken, pFileModifiedTime);
+
+			// display basic exposure information
+			if (rawMeta->HasExposureTime()) {
+				double exposureTime = rawMeta->GetExposureTime();
+				Rational shutterSpeed = (exposureTime < 1.0) ? Rational(1, Helpers::RoundToInt(1.0 / exposureTime)) : Rational(Helpers::RoundToInt(exposureTime), 1);
+				_exifDisplay->AddLine(CNLS::GetString(_T("Exposure time (s):")), shutterSpeed);
 			}
-			else {
-				const FILETIME* pFileTime = pFileList->CurrentModificationTime();
-				if (pFileTime != NULL) {
-					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Modification date:")), *pFileTime);
-				}
+			if (rawMeta->HasApertureValue()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("F-Number:")), rawMeta->GetApertureValue(), 1);
 			}
-			if (pRawMetaData->IsGPSInformationPresent()) {
-				CString sGPSLocation = CreateGPSString(pRawMetaData->GetGPSLatitude(), pRawMetaData->GetGPSLongitude());
-				m_pEXIFDisplay->SetGPSLocation(sGPSLocation, CreateGPSURL(pRawMetaData->GetGPSLatitude(), pRawMetaData->GetGPSLongitude()));
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Location:")), sGPSLocation, true);
-				if (pRawMetaData->IsGPSAltitudePresent()) {
-					m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Altitude (m):")), pRawMetaData->GetGPSAltitude(), 0);
-				}
+			if (rawMeta->HasISOSpeed()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("ISO Speed:")), (int)rawMeta->GetISOSpeed());
 			}
-			if (pRawMetaData->GetManufacturer()[0] != 0) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Camera model:")), CString(pRawMetaData->GetManufacturer()) + _T(" ") + pRawMetaData->GetModel());
+			if (rawMeta->HasFocalLength()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("Focal length (mm):")), rawMeta->GetFocalLength(), 1);
 			}
-			if (pRawMetaData->GetExposureTime() > 0.0) {
-				double exposureTime = pRawMetaData->GetExposureTime();
-				Rational rational = (exposureTime < 1.0) ? Rational(1, Helpers::RoundToInt(1.0 / exposureTime)) : Rational(Helpers::RoundToInt(exposureTime), 1);
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Exposure time (s):")), rational);
+			double focalLengthEquivalent = EXIFHelpers::CalcFocalLengthEquivalent(rawMeta->GetMake(), rawMeta->GetModel(), rawMeta->GetFocalLength());
+			if (focalLengthEquivalent > 0.0) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("35mm equiv focal length (mm):")), focalLengthEquivalent, 1);
 			}
-			if (pRawMetaData->IsFlashFired()) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Flash fired:")), CNLS::GetString(_T("yes")));
+			if (rawMeta->GetFlashFired()) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("Flash fired:")), CNLS::GetString(_T("yes")));
 			}
-			if (pRawMetaData->GetFocalLength() > 0.0) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Focal length (mm):")), pRawMetaData->GetFocalLength(), 1);
-			}
-			if (pRawMetaData->GetAperture() > 0.0) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("F-Number:")), pRawMetaData->GetAperture(), 1);
-			}
-			if (pRawMetaData->GetIsoSpeed() > 0.0) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("ISO Speed:")), (int)pRawMetaData->GetIsoSpeed());
+
+			// display image size
+			_exifDisplay->AddLine(CNLS::GetString(_T("Image width:")), rawMeta->GetWidth());
+			_exifDisplay->AddLine(CNLS::GetString(_T("Image height:")), rawMeta->GetHeight());
+
+			// display camera name
+			CString make = rawMeta->GetMake();
+			CString model = rawMeta->GetModel();
+			CString camera = GetFullCameraName(make, model);
+			_exifDisplay->AddLine(_T("%s"), CNLS::GetString(_T("Camera model:")), camera);
+
+			// display GPS location if available
+			if (rawMeta->HasGPSLocation()) {
+				GPSCoordinate* latitude = rawMeta->GetGPSLatitude();
+				GPSCoordinate* longitude = rawMeta->GetGPSLongitude();
+				bool hasAltidue = rawMeta->HasAltitude();
+				double altitude = hasAltidue ? rawMeta->GetGPSAltitude() : 0.0;
+
+				DisplayLocationInfo(latitude, longitude, hasAltidue, altitude,
+					CNLS::GetString(_T("Location:")), CNLS::GetString(_T("Altitude (m):")));
 			}
 #endif
 		}
 		else {
-			const FILETIME* pFileTime = pFileList->CurrentModificationTime();
-			if (pFileTime != NULL) {
-				m_pEXIFDisplay->AddLine(CNLS::GetString(_T("Modification date:")), *pFileTime);
+			const FILETIME* fileDateTime = fileList->CurrentModificationTime();
+			if (fileDateTime != NULL) {
+				_exifDisplay->AddLine(CNLS::GetString(_T("Modification date:")), *fileDateTime);
 			}
 		}
 	}
 
-	if (sComment == NULL || sComment[0] == 0 || ((std::wstring)sComment).find_first_not_of(L" \t\n\r\f\v", 0) == std::wstring::npos) {
-		sComment = CurrentImage()->GetJPEGComment();
+	if (IsEmpty(comment)) {
+		comment = CurrentImage()->GetJPEGComment();
 	}
-	if (CSettingsProvider::This().ShowJPEGComments() && sComment != NULL && sComment[0] != 0) {
-		m_pEXIFDisplay->SetComment(sComment);
+
+	if (CSettingsProvider::This().ShowJPEGComments() && !IsEmpty(comment)) {
+		_exifDisplay->SetComment(comment);
 	}
 }
 
-bool CEXIFDisplayCtl::OnMouseMove(int nX, int nY) {
-	bool bHandled = CPanelController::OnMouseMove(nX, nY);
-	bool bMouseOver = m_pEXIFDisplay->PanelRect().PtInRect(CPoint(nX, nY));
-	m_pEXIFDisplay->GetControl<CButtonCtrl*>(CEXIFDisplay::ID_btnClose)->SetShow(bMouseOver);
-	return bHandled;
+bool CEXIFDisplayCtl::OnMouseMove(int x, int y) {
+	bool handled = CPanelController::OnMouseMove(x, y);
+	bool mouseOver = _exifDisplay->PanelRect().PtInRect(CPoint(x, y));
+	_exifDisplay->GetControl<CButtonCtrl*>(CEXIFDisplay::ID_btnClose)->SetShow(mouseOver);
+	return handled;
 }
 
-void CEXIFDisplayCtl::OnShowHistogram(void* pContext, int nParameter, CButtonCtrl & sender) {
-	CEXIFDisplayCtl* pThis = (CEXIFDisplayCtl*)pContext;
-	pThis->m_pEXIFDisplay->SetShowHistogram(!pThis->m_pEXIFDisplay->GetShowHistogram());
-	pThis->m_pEXIFDisplay->RequestRepositioning();
+void CEXIFDisplayCtl::OnShowHistogram(void* context, int parameter, CButtonCtrl & sender) {
+	CEXIFDisplayCtl* pThis = (CEXIFDisplayCtl*)context;
+	pThis->_exifDisplay->SetShowHistogram(!pThis->_exifDisplay->GetShowHistogram());
+	pThis->_exifDisplay->RequestRepositioning();
 	pThis->InvalidateMainDlg();
 }
 
-void CEXIFDisplayCtl::OnClose(void* pContext, int nParameter, CButtonCtrl & sender) {
-	CEXIFDisplayCtl* pThis = (CEXIFDisplayCtl*)pContext;
+void CEXIFDisplayCtl::OnClose(void* context, int parameter, CButtonCtrl & sender) {
+	CEXIFDisplayCtl* pThis = (CEXIFDisplayCtl*)context;
 	pThis->m_pMainDlg->ExecuteCommand(IDM_SHOW_FILEINFO);
 }
 
-double CEXIFDisplayCtl::GetFocalLenghtEquiv(CEXIFReader* pEXIFReader) {
-	if (pEXIFReader->GetFocalLengthEquivalentPresent()) {
-		return (double)pEXIFReader->GetFocalLengthEquivalent();
+double CEXIFDisplayCtl::GetFocalLenghtEquiv(CEXIFReader* exifReader) {
+	if (exifReader->HasFocalLengthEquivalent()) {
+		return (double)exifReader->GetFocalLengthEquivalent();
 	}
-	else if (pEXIFReader->GetFocalLengthPresent()) {
+	else if (exifReader->HasFocalLength()) {
 		// try to calculate using crop factor
-		return pEXIFReader->CalcFocalLengthEquiv(pEXIFReader->GetFocalLength());
+		return exifReader->CalcFocalLengthEquiv(exifReader->GetFocalLength());
 	}
 	else {
 		return 0.0;
 	}
 }
-

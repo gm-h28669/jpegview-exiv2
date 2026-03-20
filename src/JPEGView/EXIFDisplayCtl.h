@@ -15,7 +15,7 @@ public:
 	virtual float DimFactor() { return 0.5f; }
 
 	virtual bool IsVisible();
-	virtual bool IsActive() { return m_bVisible; }
+	virtual bool IsActive() { return _visible; }
 
 	virtual void SetVisible(bool bVisible);
 	virtual void SetActive(bool bActive);
@@ -26,11 +26,15 @@ public:
 	virtual void OnPrePaintMainDlg(HDC hPaintDC);
 
 private:
-	bool m_bVisible;
-	CEXIFDisplay* m_pEXIFDisplay;
-	CPanel* m_pImageProcPanel;
-	int m_nFileNameHeight;
+	bool _visible;
+	CEXIFDisplay* _exifDisplay;
+	CPanel* _imageProcessingPanel;
+	int _fileNameHeight;
 
+	void DisplayImageSizeInfo(int width, int height);
+	void DisplayDateTakenOrLastModifiedTime(bool hasDateTaken, SYSTEMTIME dateTaken, const FILETIME* fileModifiedTime);
+	void DisplayLocationInfo(GPSCoordinate* latitude, GPSCoordinate* longitude, bool hasAltitude, double altitude, 
+		LPCTSTR descriptionLocation, LPCTSTR descricptionAltitudebool, bool useBoldFont = false);
 	void FillEXIFDataDisplay();
 	static void OnShowHistogram(void* pContext, int nParameter, CButtonCtrl & sender);
 	static void OnClose(void* pContext, int nParameter, CButtonCtrl & sender);

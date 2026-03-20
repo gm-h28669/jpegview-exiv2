@@ -26,7 +26,7 @@ public:
 	void AddPrefix(LPCTSTR sPrefix);
 	void AddTitle(LPCTSTR sTitle);
 	void SetComment(LPCTSTR sComment);
-	void SetGPSLocation(LPCTSTR sLocation, LPCTSTR sURL);
+	void SetGPSLocation(LPCTSTR sLocation, LPCTSTR sURL, bool useBoldFont = false);
 	void AddLine(LPCTSTR sDescription, LPCTSTR sValue, bool valueIsURL = false);
 	void AddLine(LPCTSTR sDescription, double dValue, int nDigits);
 	void AddLine(LPCTSTR sDescription, int nValue);

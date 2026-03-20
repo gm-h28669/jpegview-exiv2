@@ -75,8 +75,8 @@ void CImageProcPanelCtl::AfterNewImageLoaded() {
 		}
 		m_pImageProcPanel->GetTextFilename()->SetEditable(!m_pMainDlg->GetFileList()->IsSlideShowList());
 		CEXIFReader* pEXIF = CurrentImage()->GetEXIFReader();
-		if (pEXIF != NULL && pEXIF->GetAcquisitionTime().wYear > 1600) {
-			m_pImageProcPanel->GetTextAcqDate()->SetText(CString(_T("* ")) + Helpers::SystemTimeToString(pEXIF->GetAcquisitionTime()));
+		if (pEXIF != NULL && pEXIF->HasDateTaken()) {
+			m_pImageProcPanel->GetTextAcqDate()->SetText(CString(_T("* ")) + Helpers::SystemTimeToString(pEXIF->GetDateTaken()));
 		} else {
 			m_pImageProcPanel->GetTextAcqDate()->SetText(_T(""));
 		}

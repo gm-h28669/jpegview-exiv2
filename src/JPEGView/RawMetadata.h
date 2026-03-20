@@ -1,19 +1,35 @@
 #pragma once
 
 #include "EXIFReader.h"
+#include "EXIFHelpers.h"
 
 // Metadata read from camera RAW images
 class CRawMetadata
 {
 public:
-	LPCTSTR GetManufacturer() { return m_manufacturer; }
+	bool HasMake() { return !m_manufacturer.IsEmpty(); }
+	LPCTSTR GetMake() { return m_manufacturer; }
+
+	bool HasModel() { return !m_model.IsEmpty(); }
 	LPCTSTR GetModel() { return m_model; }
-	const SYSTEMTIME& GetAcquisitionTime() { return m_acquisitionTime; }
-	bool IsFlashFired() { return m_flashFired; }
-	double GetIsoSpeed() { return m_isoSpeed; }
+
+	bool HasDateTaken() { return m_acquisitionTime.wYear >= 1970; }
+	const SYSTEMTIME& GetDateTaken() { return m_acquisitionTime; }
+
+	bool GetFlashFired() { return m_flashFired; }
+
+	bool HasISOSpeed() { return m_isoSpeed > 0.0; }
+	double GetISOSpeed() { return m_isoSpeed; }
+
+	bool HasExposureTime() { return m_exposureTime > 0.0; }
 	double GetExposureTime() { return m_exposureTime; }
+
+	bool HasFocalLength() { return m_focalLength > 0.0; }
 	double GetFocalLength() { return m_focalLength; }
-	double GetAperture() { return m_aperture; }
+	
+	bool HasApertureValue() { return m_aperture > 0.0; }
+	double GetApertureValue() { return m_aperture; }
+
 	// Note: Orientation is in cdraw format ('flip' global variable in cdraw_mod.cpp)
 	int GetOrientation() { return m_orientatation; }
 	int GetWidth() { return m_width; }
@@ -21,17 +37,19 @@ public:
 	GPSCoordinate* GetGPSLatitude() { return m_pLatitude; }
 	GPSCoordinate* GetGPSLongitude() { return m_pLongitude; }
 	double GetGPSAltitude() { return m_altitude; }
-	bool IsGPSInformationPresent() { return m_pLatitude != NULL && m_pLongitude != NULL; }
-	bool IsGPSAltitudePresent() { return m_altitude != CEXIFReader::UNKNOWN_DOUBLE_VALUE; }
+	bool HasGPSLocation() { return m_pLatitude != NULL && m_pLongitude != NULL; }
+	bool HasAltitude() { return m_altitude != 0.0; }
 
 
 	// Note: Orientation is in cdraw format ('flip' global variable in cdraw_mod.cpp)
 	CRawMetadata(char* manufacturer, char* model, time_t acquisitionTime, bool flashFired, double isoSpeed, double exposureTime, double focalLength,
 		double aperture, int orientation, int width, int height, float* latitude = NULL, char latref = 0, float* longitude = NULL, char longref = 0,
-		double altitude = CEXIFReader::UNKNOWN_DOUBLE_VALUE, char altref = 0)
+		double altitude = 0.0, char altref = 0)
 	{
 		m_manufacturer = CString(manufacturer);
 		m_model = CString(model);
+		m_model = EXIFHelpers::RemoveMakeFromModel(m_manufacturer, m_model);
+
 		m_flashFired = flashFired;
 		m_isoSpeed = isoSpeed;
 		m_exposureTime = exposureTime;
@@ -44,9 +62,9 @@ public:
 		if (latitude != NULL && longitude != NULL && !(memcmp(latitude, zeros, 3 * sizeof(float)) == 0 && memcmp(longitude, zeros, 3 * sizeof(float)) == 0)) {
 			wchar_t c[2] = { 0 };
 			c[0] = btowc(latref);
-			m_pLatitude = new GPSCoordinate(c, latitude[0], latitude[1], latitude[2]);
+			m_pLatitude = new GPSCoordinate(latitude[0], latitude[1], latitude[2], c);
 			c[0] = btowc(longref);
-			m_pLongitude = new GPSCoordinate(c, longitude[0], longitude[1], longitude[2]);
+			m_pLongitude = new GPSCoordinate(longitude[0], longitude[1], longitude[2], c);
 		} else {
 			m_pLatitude = m_pLongitude = NULL;
 		}

@@ -20,7 +20,7 @@ namespace EXIFHelpers {
 		}
 	}
 
-	bool SetModificationDate(LPCTSTR sFileName, const SYSTEMTIME& time) {
+	bool SetFileModifiedDate(LPCTSTR sFileName, const SYSTEMTIME& time) {
 		HANDLE hFile = ::CreateFile(sFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
 		if (hFile == INVALID_HANDLE_VALUE) {
 			return false;
@@ -32,19 +32,19 @@ namespace EXIFHelpers {
 		return bOk;
 	}
 
-	bool SetModificationDateToEXIF(LPCTSTR sFileName, CJPEGImage* pImage) {
-		if (pImage->GetEXIFReader() == NULL || !pImage->GetEXIFReader()->GetAcquisitionTimePresent()) {
+	bool SetFileModifiedDateToDateTaken(LPCTSTR sFileName, CJPEGImage* pImage) {
+		if (pImage->GetEXIFReader() == NULL || !pImage->GetEXIFReader()->HasDateTaken()) {
 			return false;
 		}
-		SYSTEMTIME st = pImage->GetEXIFReader()->GetAcquisitionTime();
+		SYSTEMTIME st = pImage->GetEXIFReader()->GetDateTaken();
 		// EXIF times are always local times, convert to UTC
 		TIME_ZONE_INFORMATION tzi;
 		::GetTimeZoneInformation(&tzi);
 		::TzSpecificLocalTimeToSystemTime(&tzi, &st, &st);
-		return SetModificationDate(sFileName, st);
+		return SetFileModifiedDate(sFileName, st);
 	}
 
-	bool SetModificationDateToEXIF(LPCTSTR sFileName) {
+	bool SetFileModifiedDateToDateTaken(LPCTSTR sFileName) {
 		bool bSuccess = false;
 		Gdiplus::Bitmap* pBitmap = new Gdiplus::Bitmap(sFileName);
 		if (pBitmap->GetLastStatus() == Gdiplus::Ok) {
@@ -53,12 +53,13 @@ namespace EXIFHelpers {
 				Gdiplus::PropertyItem* pItem = (Gdiplus::PropertyItem*)malloc(nSize);
 				if (pBitmap->GetPropertyItem(PropertyTagExifDTOrig, nSize, pItem) == Gdiplus::Ok) {
 					SYSTEMTIME time;
-					if (CEXIFReader::ParseDateString(time, CString((char*)pItem->value))) {
+					CString dateTaken = CString((LPCSTR)pItem->value);
+					if (CEXIFReader::ParseExifDateTimeToSysTime(dateTaken, time)) {
 						delete pBitmap; pBitmap = NULL; // else the file is locked
 						TIME_ZONE_INFORMATION tzi;
 						::GetTimeZoneInformation(&tzi);
 						::TzSpecificLocalTimeToSystemTime(&tzi, &time, &time);
-						bSuccess = SetModificationDate(sFileName, time);
+						bSuccess = SetFileModifiedDate(sFileName, time);
 					}
 				}
 				free(pItem);
@@ -68,7 +69,7 @@ namespace EXIFHelpers {
 		return bSuccess;
 	}
 
-	EXIFResult SetModificationDateToEXIFAllFiles(LPCTSTR sDirectory) {
+	EXIFResult SetFileModifiedDateToDateTakenInAllFiles(LPCTSTR sDirectory) {
 		std::list<CString> listFileNames;
 		FindFiles(sDirectory, _T("*.jpg"), listFileNames);
 		FindFiles(sDirectory, _T("*.jpeg"), listFileNames);
@@ -76,7 +77,7 @@ namespace EXIFHelpers {
 		int nNumFailed = 0;
 		std::list<CString>::iterator iter;
 		for (iter = listFileNames.begin(); iter != listFileNames.end(); iter++) {
-			if (!SetModificationDateToEXIF(*iter)) {
+			if (!SetFileModifiedDateToDateTaken(*iter)) {
 				nNumFailed++;
 			}
 		}
@@ -148,11 +149,11 @@ namespace EXIFHelpers {
 		return mapByMake;
 	}
 
-	// case-insensitive ToUpper helper for CString, preserves original string by creating a copy
-	CString ToUpper(const CString& str) {
-		CString upper = str;
-		upper.MakeUpper();
-		return upper;
+	// convert a string to uppercase
+	// note: MakeUpper will change original string, so we pass by value to keep original string unmodified
+	CString ToUpper(CString str) {
+		str.MakeUpper();
+		return str;
 	}
 
 	// Compute the crop factor (same logic as original)
@@ -190,5 +191,19 @@ namespace EXIFHelpers {
 
 	double CalcFocalLengthEquivalent(const CString make, const CString model, double focalLength) {
 		return round(focalLength * GetCropFactor(make, model, focalLength));
+	}
+
+	// note: MakeUpper will change original string, so we pass by value to keep original strings unmodified
+	bool ContainsCaseInsensitive(CString source, CString search) {
+		return source.MakeUpper().Find(search.MakeUpper()) != -1;
+	}
+
+	CString RemoveMakeFromModel(const CString& make, const CString& model) {
+		// check if the make is at the beginning of the model string
+		if (model.Left(make.GetLength()).CompareNoCase(make) == 0) {
+			// remove the make from the model
+			return model.Mid(make.GetLength()).Trim();
+		}
+		return model;
 	}
 }

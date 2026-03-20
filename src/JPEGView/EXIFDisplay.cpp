@@ -101,8 +101,9 @@ void CEXIFDisplay::SetComment(LPCTSTR sComment) {
 	m_sComment = (s.GetLength() == 0) ? NULL : CopyStrAlloc(s);
 }
 
-void CEXIFDisplay::SetGPSLocation(LPCTSTR sLocation, LPCTSTR sURL) {
+void CEXIFDisplay::SetGPSLocation(LPCTSTR sLocation, LPCTSTR sURL, bool useBoldFont) {
 	CURLCtrl* pLinkLocation = GetControl<CURLCtrl*>(CEXIFDisplay::ID_urlLocation);
+	pLinkLocation->SetBold(useBoldFont);
 	pLinkLocation->SetText(sLocation);
 	pLinkLocation->SetURL(sURL);
 	pLinkLocation->SetShow(true, false);
