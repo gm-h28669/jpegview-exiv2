@@ -4,6 +4,9 @@
 #include "Helpers.h"
 #include "DirectoryWatcher.h"
 #include "Shlwapi.h"
+#include <set>
+#include <string>
+#include "StringHelpers.h"
 
 ///////////////////////////////////////////////////////////////////////////////////
 // Helpers
@@ -135,6 +138,8 @@ static const TCHAR* csFileEndingsRAW = _T("*.pef;*.dng;*.crw;*.nef;*.cr2;*.mrw;*
 static const int MAX_ENDINGS = 48;
 static int nNumEndings;
 static LPCTSTR* sFileEndings;
+// helper to avoid adding the same extension multiple times if it is present in raw and WIC file extension lists
+static std::set<std::string> uniqueExtensions = {};		
 
 __declspec(dllimport) bool __stdcall WICPresent(void);
 
@@ -162,7 +167,11 @@ static void ParseAndAddFileEndings(LPCTSTR sEndings) {
 				sCurrent++;
 			}
 			if (_tcslen(sStart) > 2) {
-				sFileEndings[nNumEndings++] = sStart + 2;
+				std::string extension = StringHelpers::WideToUtf8(sStart + 2);
+				auto res = uniqueExtensions.insert(extension);
+				if (res.second) {
+				   sFileEndings[nNumEndings++] = sStart + 2;
+				}
 			}
 			sStart = sCurrent;
 		}
@@ -174,8 +183,10 @@ static void ParseAndAddFileEndings(LPCTSTR sEndings) {
 static LPCTSTR* GetSupportedFileEndingList() {
 	if (sFileEndings == NULL) {
 		sFileEndings = new LPCTSTR[MAX_ENDINGS];
+		uniqueExtensions.clear();
 		for (nNumEndings = 0; nNumEndings < cnNumEndingsInternal; nNumEndings++) {
 			sFileEndings[nNumEndings] = csFileEndingsInternal[nNumEndings];
+			uniqueExtensions.insert(std::string(StringHelpers::WideToUtf8(csFileEndingsInternal[nNumEndings])));
 		}
 
 		LPCTSTR sFileEndingsWIC = CSettingsProvider::This().FilesProcessedByWIC();
