@@ -73,6 +73,10 @@ public:
 	// The class does not take ownership of the memory (no copy made), thus the APP1 block must not be deleted
 	// while the EXIF reader class is deleted.
 	CEXIFReader(void* pApp1Block, EImageFormat eImageFormat);
+
+	// get EXIF data for image given by image path using Exiv2 library
+	CEXIFReader::CEXIFReader(LPCWSTR imagePath);
+
 	~CEXIFReader(void);
 
 	// Parse date string in the EXIF date/time format
@@ -174,6 +178,8 @@ public:
 	double CalcFocalLengthEquiv(double focalLength);
 
 private:
+	void TransferImageMeta(Exiv2Parser::imageMetadata& imageMeta);
+
 	CString _make = _T("");
 	CString _model = _T("");
 	CString _userComment = _T("");
@@ -205,10 +211,10 @@ private:
 	GPSCoordinate* _longitude = NULL;
 	double _altitude = 0.0;
 
-	bool _littleEndian;
-	uint8* _pApp1;
-	uint8* _pTagOrientation;
-	uint8* _pLastIFD0;
-	uint8* _pIFD1;
-	uint8* _plastIFD1;
+	bool _littleEndian = false;
+	uint8* _pApp1 = NULL;
+	uint8* _pTagOrientation = NULL;
+	uint8* _pLastIFD0 = NULL;
+	uint8* _pIFD1 = NULL;
+	uint8* _plastIFD1 = NULL;
 };

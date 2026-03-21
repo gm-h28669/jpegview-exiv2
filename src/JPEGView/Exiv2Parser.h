@@ -2,6 +2,7 @@
 #include <string>    
 #include <cstdint> 
 #include <ctime>
+#include <windows.h>
 
 namespace Exiv2Parser {
     typedef struct rational {
@@ -63,11 +64,14 @@ namespace Exiv2Parser {
         uint32_t thumbnailHeight = 0;
         int jpegThumbnailStreamLenght = 0;
 
+		bool littleEndian = false;
+
         gpsMetadata gps;
 
         imageMetadata() = default;
     } imageMetadata;
 
     imageMetadata getExifMetadata(const uint8_t* pApp1Block);
+    imageMetadata getExifMetadata(LPCWSTR imagePath);
     double convertRationalToDouble(const rational& number);
 }

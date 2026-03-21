@@ -294,6 +294,9 @@
     <ClCompile Include="Exiv2Parser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="StringHelpers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BasicProcessing.h">
@@ -569,6 +572,9 @@
     <ClInclude Include="Exiv2Parser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="StringHelpers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="res\JPEGView.ico">
@@ -580,5 +586,13 @@
     <ResourceCompile Include="JPEGView.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="$(LibExpatDir)lib\$(Platform)\Debug\$(LibExpatName).lib" />
+    <Library Include="$(LibExpatDir)lib\$(Platform)\Release\$(LibExpatName).lib" />
+    <Library Include="$(ZLibDir)lib\$(Platform)\Debug\$(ZLibName).lib" />
+    <Library Include="$(ZLibDir)lib\$(Platform)\Release\$(ZLibName).lib" />
+    <Library Include="$(Exiv2Dir)lib\$(Platform)\Debug\$(Exiv2Name).lib" />
+    <Library Include="$(Exiv2Dir)lib\$(Platform)\Release\$(Exiv2Name).lib" />
   </ItemGroup>
 </Project>

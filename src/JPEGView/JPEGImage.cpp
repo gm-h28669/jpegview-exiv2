@@ -158,6 +158,15 @@ CJPEGImage::CJPEGImage(int nWidth, int nHeight, void* pPixels, void* pEXIFData, 
 	memcpy(m_fColorCorrectionFactors, CSettingsProvider::This().ColorCorrectionAmounts(), sizeof(m_fColorCorrectionFactors));
 }
 
+void CJPEGImage::CreateExifReader(LPCWSTR imagePath)
+{ 
+	if (m_nEXIFSize == 0 && m_pEXIFData == NULL && m_pEXIFReader == NULL) {
+		// set up reader to get EXIF data via Exiv2's open and readMetadata functions
+		// in worst case Exiv2 cannot read metadata and EXIF reader will return empty values
+		m_pEXIFReader = new CEXIFReader(imagePath);
+	}
+}
+
 CJPEGImage::~CJPEGImage(void) {
 	delete[] m_pOrigPixels;
 	m_pOrigPixels = NULL;

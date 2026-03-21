@@ -37,6 +37,11 @@ public:
 		CLocalDensityCorr* pLDC = NULL, bool bIsThumbnailImage = false, CRawMetadata* pRawMetadata = NULL);
 	~CJPEGImage(void);
 
+	// create EXIF reader for use via Exiv2 library, must be called immediately after constructor, before any other method is called. 
+	// This is a "hack" to allow also displaying image information if image was loaded via WICLoader.
+	// WICLoader does not provide EXIF data in the required format, so we will delegate it to Exiv2 library
+	void CreateExifReader(LPCWSTR imagePath);
+
 	// Gets resampled and processed 32 bpp DIB image (up or downsampled).
 	// Parameters:
 	// fullTargetSize: Full target size of resized image to render (without any clipping to actual clipping size)

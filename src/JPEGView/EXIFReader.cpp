@@ -171,9 +171,6 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	_dateTaken{ 0 },
 	_dateLastModified{ 0 }
 {
-	_thumbWidth = -1;
-	_thumbHeight = -1;
-
 	// check if APP1 marker valid
 	_pApp1 = (uint8*)pApp1Block;
 	if (_pApp1[0] != 0xFF || _pApp1[1] != 0xE1) {
@@ -249,62 +246,11 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 	Exiv2Parser::imageMetadata imageMeta = Exiv2Parser::getExifMetadata(_pApp1);
 
 	// tranfer data from DTO to member variables of old class, so that the old code can use it without change
-
-	// get camera make
-	_make = imageMeta.make.c_str();
-	// return only the well known brand, for example "Olympus Imaging Corporation" is simplified to "Olympus"
-	_make =getTargetIfContained(_make, _T("Olympus"));
-
-	// get camera model
-	_model = imageMeta.model.c_str();
-	_model = EXIFHelpers::RemoveMakeFromModel(_make, _model);
-
-	// get user comment and remove useless user comments added by some cameras
-	_userComment = imageMeta.userComment.c_str();
-	_userComment = getReplacementOnExactMatch(_userComment, _T(""), { _T("User comments") });
-
-	// get image description
-	_description = imageMeta.description.c_str();
-	// remove useless image descriptions added by some cameras
-	_description = getReplacementOnExactMatch(_description, _T(""), { _T("OLYMPUS DIGITAL CAMERA"), _T("raw") });
-
-	// get software used to create the image
-	_software = imageMeta.software.c_str();
-
-	// get date taken and last modified date
-	tmToSystemTime(imageMeta.dateTaken, _dateTaken);
-	tmToSystemTime(imageMeta.dateModified, _dateLastModified);
-
-	// get basic exposure info
-	_exposureTime = Rational(imageMeta.exposureTime);
-	_exposureBias = Exiv2Parser::convertRationalToDouble(imageMeta.exposureBias);
-	_aperture = imageMeta.aperture;
-	_isoSpeed = imageMeta.isoSpeed;
-	_flashFired = imageMeta.flashFired;
-	m_WhiteBalanceMode = imageMeta.whiteBalance;
-	_imageOrientation = (uint8)imageMeta.orientation;
-
-	// get lens related info
-	_focalLength = imageMeta.focalLength;
-	_focalLengthEquivalent = imageMeta.focalLengthEquivalent;
-	
-	_lensName = imageMeta.lensName.c_str();
-	// if lens was not found, Exiv2 returns "N/A", but in this case we want to have empty string in _lensName variable
-	_lensName = getReplacementOnExactMatch(_lensName, _T(""), { _T("N/A") });
-
-	for (int i = 0; i < 4; i++) {
-		m_LensInfo[i] = Rational(imageMeta.lensInfo[i]);
-	}
-
-	// get GPS related info
-	if (imageMeta.gps.positionAvailable) {
-		_latitude = new GPSCoordinate(imageMeta.gps.latitude);
-		_longitude = new GPSCoordinate(imageMeta.gps.longitude);
-		_altitude = imageMeta.gps.altitude;
-	}
+	TransferImageMeta(imageMeta);
 
 	// get IFD1 segment info: pointer to the first IFD1 tag and pointer to the end of the IFD1 segment
 	// this segment contains thumbnail image info and thumbnail itself (if JPEG compressed thumbnail is present)
+	// TODO: get thumbnail info (width, height, compression type, etc) using Exiv2 library 
 	if (offsetIFD1 != 0) {
 		_pIFD1 = pTIFFHeader + offsetIFD1;
 		if (_pIFD1 - _pApp1 >= app1Size || _pIFD1 - _pApp1 < 0) {
@@ -352,6 +298,22 @@ CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
 			}
 		}
 	}
+}
+
+CEXIFReader::CEXIFReader(LPCWSTR imagePath)
+	: _exposureTime{ 0, 0 },
+	_dateTaken{ 0 },
+	_dateLastModified{ 0 }
+{
+	_thumbWidth = -1;
+	_thumbHeight = -1;
+
+	// new implementation gets EXIF metadata using Exiv2 library
+	// Exiv2 library returns more accurate values for some tags (e.g. focal length, lens name, etc)
+	// with new approach zhe code will also become more simple to maintain in future
+	Exiv2Parser::imageMetadata imageMeta = Exiv2Parser::getExifMetadata(imagePath);
+
+	TransferImageMeta(imageMeta);
 }
 
 CEXIFReader::~CEXIFReader(void) {
@@ -438,4 +400,64 @@ CString CEXIFReader::GetLensInfo() {
 		}
 	}
 	return focalRange + fNumberRange;
+}
+
+// tranfer data from DTO to member variables of this class, so that the existing code can use it without change
+void CEXIFReader::TransferImageMeta(Exiv2Parser::imageMetadata& imageMeta)
+{
+	// get indication for byte order of the EXIF data (true=little endian, false=big endian)
+	_littleEndian = imageMeta.littleEndian;
+
+	// get camera make
+	_make = imageMeta.make.c_str();
+	// return only the well known brand, for example "Olympus Imaging Corporation" is simplified to "Olympus"
+	_make = getTargetIfContained(_make, _T("Olympus"));
+
+	// get camera model
+	_model = imageMeta.model.c_str();
+	_model = EXIFHelpers::RemoveMakeFromModel(_make, _model);
+
+	// get user comment and remove useless user comments added by some cameras
+	_userComment = imageMeta.userComment.c_str();
+	_userComment = getReplacementOnExactMatch(_userComment, _T(""), { _T("User comments") });
+
+	// get image description
+	_description = imageMeta.description.c_str();
+	// remove useless image descriptions added by some cameras
+	_description = getReplacementOnExactMatch(_description, _T(""), { _T("OLYMPUS DIGITAL CAMERA"), _T("raw") });
+
+	// get software used to create the image
+	_software = imageMeta.software.c_str();
+
+	// get date taken and last modified date
+	tmToSystemTime(imageMeta.dateTaken, _dateTaken);
+	tmToSystemTime(imageMeta.dateModified, _dateLastModified);
+
+	// get basic exposure info
+	_exposureTime = Rational(imageMeta.exposureTime);
+	_exposureBias = Exiv2Parser::convertRationalToDouble(imageMeta.exposureBias);
+	_aperture = imageMeta.aperture;
+	_isoSpeed = imageMeta.isoSpeed;
+	_flashFired = imageMeta.flashFired;
+	m_WhiteBalanceMode = imageMeta.whiteBalance;
+	_imageOrientation = (uint8)imageMeta.orientation;
+
+	// get lens related info
+	_focalLength = imageMeta.focalLength;
+	_focalLengthEquivalent = imageMeta.focalLengthEquivalent;
+
+	_lensName = imageMeta.lensName.c_str();
+	// if lens was not found, Exiv2 returns "N/A", but in this case we want to have empty string in _lensName variable
+	_lensName = getReplacementOnExactMatch(_lensName, _T(""), { _T("N/A") });
+
+	for (int i = 0; i < 4; i++) {
+		m_LensInfo[i] = Rational(imageMeta.lensInfo[i]);
+	}
+
+	// get GPS related info
+	if (imageMeta.gps.positionAvailable) {
+		_latitude = new GPSCoordinate(imageMeta.gps.latitude);
+		_longitude = new GPSCoordinate(imageMeta.gps.longitude);
+		_altitude = imageMeta.gps.altitude;
+	}
 }

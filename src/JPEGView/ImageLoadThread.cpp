@@ -1085,6 +1085,9 @@ void CImageLoadThread::ProcessReadWICRequest(CRequest* request) {
 		unsigned char* pDIB = LoadImageWithWIC(sFileName, &alloc, &dealloc, &nWidth, &nHeight);
 		if (pDIB != NULL) {
 			request->Image = new CJPEGImage(nWidth, nHeight, pDIB, NULL, 4, 0, IF_WIC, false, 0, 1, 0);
+			// try to get EXIF data via Exiv2 library
+			// this requires opening the image again later, but if Exiv2 succeeds then we have some image metadata
+			request->Image->CreateExifReader(sFileName);
 		}
 	} catch (...) {
 		// fatal error in WIC
