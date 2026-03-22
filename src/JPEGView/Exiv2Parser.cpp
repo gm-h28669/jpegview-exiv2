@@ -249,12 +249,12 @@ namespace Exiv2Parser {
             return imageMeta;
         }
 
-        // get length of APP1 segment (big endian) 
-        int nApp1Size = (pApp1Block[2] << 8) | pApp1Block[3];
+		// get length of APP1 segment (big endian) : includes the two length bytes
+        int app1Size = (pApp1Block[2] << 8) | pApp1Block[3];
 
-        // caclculate length of exif segment
+        // calculate length of exif segment
         const Exiv2::byte* exifPtr = pApp1Block + 4;          // starts after marker and length = offset 4
-        size_t exifSize = static_cast<size_t>(nApp1Size - 2); // length includes the two length bytes, segment = L-2
+        size_t exifSize = static_cast<size_t>(app1Size - 2); // APP1 segment length includes the two length bytes, segment = L-2
 
         // basic sanity check
         if (exifSize < 6) {
@@ -262,24 +262,21 @@ namespace Exiv2Parser {
             return imageMeta;
         }
 
-        // APP1 segment expected to start with "Exif\0\0"
+        // EXIF segment expected to start with "Exif\0\0"
         const unsigned char exifHeader[] = { 'E', 'x', 'i', 'f', 0, 0 };
-        const Exiv2::byte* tiffPtr = exifPtr;
-        size_t tiffSize = exifSize;
-        if (memcmp(exifPtr, exifHeader, 6) == 0) {
-            // skip it to get to the TIFF header.
-            tiffPtr += 6;
-            tiffSize -= 6;
-        }
-        else {
+        if (memcmp(exifPtr, exifHeader, 6) != 0) {
             // Not the expected EXIF signature
             logError("APP1 segment does not start with expected EXIF header", __func__);
             return imageMeta;
         }
+        
+		// TIFF header starts immediately after the "Exif\0\0" header, so offset by 6 bytes
+        const Exiv2::byte* tiffPtr = exifPtr + 6;
+        size_t tiffSize = exifSize - 6;
 
-        if (tiffSize < 2) {
-            // invalid TIFF header
-            logError("Invalid TIFF header", __func__);
+        // TIFF segment consists at least of: 2 (byte order) + 2 (magic) + 4 (offset to 0th IFD) = 8 bytes
+        if (tiffSize < 8) {
+            logError("Invalid TIFF header: length must be at least 8 bytes", __func__);
             return imageMeta;
         }
 
