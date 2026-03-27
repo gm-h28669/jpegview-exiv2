@@ -363,7 +363,7 @@ CJPEGImage* CReaderTGA::ReadTgaImage(LPCTSTR strFileName, COLORREF backgroundCol
 		}
 	}
 
-	CJPEGImage* pTargetImage = new CJPEGImage(width, height, pImageData, NULL, targetChannels, 
+	CJPEGImage* pTargetImage = new CJPEGImage(strFileName, width, height, pImageData, NULL, targetChannels,
 		0, IF_TGA, false, 0, 1, 0);
 
 	return pTargetImage;

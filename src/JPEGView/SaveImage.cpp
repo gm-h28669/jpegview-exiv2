@@ -162,11 +162,11 @@ static void* CompressAndSave(LPCTSTR sFileName, CJPEGImage * pImage,
 		memcpy(pNewStream + 2, pImage->GetEXIFData(), pImage->GetEXIFDataLength()); // copy EXIF block
 		
 		// Set image orientation back to normal orientation, we save the pixels as displayed
-		CEXIFReader exifReader(pNewStream + 2, IF_JPEG);
+		CEXIFReader exifReader(pNewStream + 2, IF_JPEG, NULL);
 		exifReader.WriteImageOrientation(1); // 1 means default orientation (unrotated)
 		if (bDeleteThumbnail) {
 			exifReader.DeleteThumbnail();
-		} else if (exifReader.HasJPEGCompressedThumbnail()) {
+		} else if (exifReader.HasThumb() && exifReader.ThumbJpegEncoded()) {
 			// recreate EXIF thumbnail image
 			CSize sizeThumb;
 			void* pDIBThumb = GetThumbnailDIB(pImage, sizeThumb);
@@ -175,7 +175,7 @@ static void* CompressAndSave(LPCTSTR sFileName, CJPEGImage * pImage,
 				unsigned char* pJPEGThumb = (unsigned char*) TurboJpeg::Compress(pDIBThumb, sizeThumb.cx, sizeThumb.cy, nJPEGThumbStreamLen, bOutOfMemory, 70);
 				if (pJPEGThumb != NULL) {
 					int nThumbJFIFLen = GetJFIFBlockLength(pJPEGThumb);
-					nEXIFBlockLenCorrection = nJPEGThumbStreamLen - nThumbJFIFLen - exifReader.GetJPEGThumbStreamLen();
+					nEXIFBlockLenCorrection = nJPEGThumbStreamLen - nThumbJFIFLen - exifReader.GetThumbSizeInBytes();
 					if (nEXIFBlockLenCorrection <= cnAdditionalThumbBytes && pImage->GetEXIFDataLength() + nEXIFBlockLenCorrection < 65536) {
 						exifReader.UpdateJPEGThumbnail(pJPEGThumb + 2 + nThumbJFIFLen, nJPEGThumbStreamLen - 2 - nThumbJFIFLen, nEXIFBlockLenCorrection, sizeThumb);
 					} else {
@@ -402,7 +402,7 @@ bool CSaveImage::SaveImage(LPCTSTR sFileName, CJPEGImage * pImage, const CImageP
 			bSuccess = SaveGDIPlus(sFileName, eFileFormat, pDIB24bpp, imageSize.cx, imageSize.cy);
 		}
 		if (bSuccess) {
-			CJPEGImage tempImage(imageSize.cx, imageSize.cy, pDIB32bpp, NULL, 4, 0, IF_Unknown, false, 0, 1, 0);
+			CJPEGImage tempImage(NULL, imageSize.cx, imageSize.cy, pDIB32bpp, NULL, 4, 0, IF_Unknown, false, 0, 1, 0);
 			nPixelHash = tempImage.GetUncompressedPixelHash();
 			tempImage.DetachOriginalPixels();
 		}

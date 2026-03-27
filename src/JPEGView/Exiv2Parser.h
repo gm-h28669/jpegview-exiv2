@@ -53,25 +53,25 @@ namespace Exiv2Parser {
         uint32_t isoSpeed = 0;
         uint32_t whiteBalance = 0;
         bool flashFired = false;
+        uint32_t rating = 0;
 
         std::string lensName;
         rational lensInfo[4];
         double focalLength = 0.0;
         double focalLengthEquivalent = 0.0;
 
-        bool jpegThumbnailPresent = false;
-        uint32_t thumbnailWidth = 0;
-        uint32_t thumbnailHeight = 0;
-        int jpegThumbnailStreamLenght = 0;
-
-		bool littleEndian = false;
+        bool hasThumb = false;
+        bool thumbJpegEncoded = false;
+        uint32_t thumbWidth = 0;
+        uint32_t thumbHeight = 0;
+        int thumbSizeInBytes = 0;
 
         gpsMetadata gps;
 
         imageMetadata() = default;
     } imageMetadata;
 
-    imageMetadata getExifMetadata(const uint8_t* pApp1Block);
-    imageMetadata getExifMetadata(LPCWSTR imagePath);
-    double convertRationalToDouble(const rational& number);
+    imageMetadata GetImageMeta(const uint8_t* pTiff, size_t tiffSize);
+    imageMetadata GetImageMeta(LPCWSTR imagePath);
+    double ConvertRationalToDouble(const rational& number);
 }

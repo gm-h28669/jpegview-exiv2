@@ -153,14 +153,9 @@ const double xyz_rgb[3][3] = {			/* XYZ from RGB */
 const float d65_white[3] = { 0.950456, 1, 1.088754 };
 int histogram[4][0x2000];
 //void (*write_thumb)(), (*write_fun)();
-void (*write_thumb)(CJPEGImage** Image, bool& bOutOfMemory), (*write_fun)(CJPEGImage** Image, bool& bOutOfMemory);
+void (*write_thumb)(CJPEGImage** Image, bool& bOutOfMemory, LPCTSTR imagePath), (*write_fun)(CJPEGImage** Image, bool& bOutOfMemory, LPCTSTR imagePath);
 void (*load_raw)(), (*thumb_load_raw)();
 jmp_buf failure;
-
-static CRawMetadata* CreateRawMetadata()
-{
-    return new CRawMetadata(make, model, timestamp, flash_used != 0.0f, iso_speed, shutter, focal_len, aperture, flip, thumb_width, thumb_height);
-}
 
 struct decode {
   struct decode *branch[2];
@@ -1361,7 +1356,7 @@ int CLASS minolta_z2()
 }
 
 //void CLASS jpeg_thumb();
-void CLASS jpeg_thumb (CJPEGImage** Image, bool& bOutOfMemory);
+void CLASS jpeg_thumb (CJPEGImage** Image, bool& bOutOfMemory, LPCTSTR imagePath);
 
 /*
 void CLASS ppm_thumb()
@@ -1376,7 +1371,7 @@ void CLASS ppm_thumb()
   free (thumb);
 }
 */
-void CLASS ppm_thumb (CJPEGImage** Image, bool& bOutOfMemory)
+void CLASS ppm_thumb (CJPEGImage** Image, bool& bOutOfMemory, LPCTSTR imagePath)
 {
     byte *thumb;
     if ((double)thumb_width * thumb_height > MAX_IMAGE_PIXELS) {
@@ -1419,7 +1414,7 @@ void CLASS ppm_thumb (CJPEGImage** Image, bool& bOutOfMemory)
 
     free(thumb);
 
-    *Image = new CJPEGImage(thumb_width, thumb_height, data, 0, 3, 0, IF_WindowsBMP, false, 0, 1, 0, NULL, false, CreateRawMetadata());
+    *Image = new CJPEGImage(imagePath, thumb_width, thumb_height, data, NULL, 3, 0, IF_WindowsBMP, false, 0, 1, 0, NULL, false);
 }
 
 /*
@@ -1438,7 +1433,7 @@ void CLASS ppm16_thumb()
   free (thumb);
 }
 */
-void CLASS ppm16_thumb(CJPEGImage** Image, bool& bOutOfMemory)
+void CLASS ppm16_thumb(CJPEGImage** Image, bool& bOutOfMemory, LPCTSTR imagePath)
 {
     byte *thumb;
 
@@ -1485,12 +1480,12 @@ void CLASS ppm16_thumb(CJPEGImage** Image, bool& bOutOfMemory)
 
     free(thumb);
 
-    *Image = new CJPEGImage(thumb_width, thumb_height, data, NULL, 3, 0, IF_WindowsBMP, false, 0, 1, 0, NULL, false, CreateRawMetadata());
+    *Image = new CJPEGImage(imagePath, thumb_width, thumb_height, data, NULL, 3, 0, IF_WindowsBMP, false, 0, 1, 0, NULL, false);
 }
 
 
 //void CLASS layer_thumb()
-void CLASS layer_thumb(CJPEGImage** Image, bool& bOutOfMemory)
+void CLASS layer_thumb(CJPEGImage** Image, bool& bOutOfMemory, LPCTSTR imagePath)
 {
 /*
   int i, c;
@@ -1510,7 +1505,7 @@ void CLASS layer_thumb(CJPEGImage** Image, bool& bOutOfMemory)
 }
 
 //void CLASS rollei_thumb()
-void CLASS rollei_thumb(CJPEGImage** Image, bool& bOutOfMemory)
+void CLASS rollei_thumb(CJPEGImage** Image, bool& bOutOfMemory, LPCTSTR imagePath)
 {
 /*
   unsigned i;
@@ -3206,7 +3201,7 @@ void CLASS foveon_decoder (unsigned size, unsigned code)
 }
 
 //void CLASS foveon_thumb()
-void CLASS foveon_thumb(CJPEGImage** Image, bool& bOutOfMemory)
+void CLASS foveon_thumb(CJPEGImage** Image, bool& bOutOfMemory, LPCTSTR imagePath)
 {
 /*
   unsigned bwide, row, col, bitbuf=0, bit=1, c, i;
@@ -10637,7 +10632,7 @@ cleanup:
 }
 */
 
-void CLASS jpeg_thumb(CJPEGImage** Image, bool& bOutOfMemory)
+void CLASS jpeg_thumb(CJPEGImage** Image, bool& bOutOfMemory, LPCTSTR imagePath)
 {
     char *thumb;
 
@@ -10657,8 +10652,8 @@ void CLASS jpeg_thumb(CJPEGImage** Image, bool& bOutOfMemory)
 
     if (pPixelData != NULL && (nBPP == 3 || nBPP == 1))
     {
-        *Image = new CJPEGImage(nWidth, nHeight, pPixelData, Helpers::FindEXIFBlock(thumb, thumb_length), nBPP,
-            Helpers::CalculateJPEGFileHash(thumb, thumb_length), IF_JPEG_Embedded, false, 0, 1, 0, NULL, false, CreateRawMetadata());
+        *Image = new CJPEGImage(imagePath, nWidth, nHeight, pPixelData, Helpers::FindEXIFBlock(thumb, thumb_length), nBPP,
+            Helpers::CalculateJPEGFileHash(thumb, thumb_length), IF_JPEG_Embedded, false, 0, 1, 0, NULL, false);
         (*Image)->SetJPEGComment(Helpers::GetJPEGComment(thumb, thumb_length));
         (*Image)->SetJPEGChromoSampling(eChromoSubSampling);
     }
@@ -10700,7 +10695,7 @@ int dcraw_main (LPCTSTR filename, CJPEGImage** Image, bool& bOutOfMemory)
         fseek (ifp, thumb_offset, SEEK_SET);
     }
 
-    (*write_fun)(Image, bOutOfMemory);
+    (*write_fun)(Image, bOutOfMemory, filename);
     fclose(ifp);
 
 cleanup:

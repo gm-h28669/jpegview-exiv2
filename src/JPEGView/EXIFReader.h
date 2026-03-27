@@ -15,25 +15,38 @@ public:
 class Rational {
 public:
 	Rational() : Rational(0, 1) {}
-	Rational(int num, int denom) { 
+	
+	Rational(int num, int denom) {
 		Numerator = num; 
 		Denominator = denom; 
 	}
-
-	Rational(Exiv2Parser::rational num) { 
-		Numerator = num.Numerator; 
-		Denominator = num.Denominator; 
+	
+	Rational(Exiv2Parser::rational num) {
+		Numerator = num.Numerator;
+		Denominator = num.Denominator;
 	}
+
 	int Numerator;
 	int Denominator;
-	bool IsEmpty() const {
-		return Numerator == 0 && Denominator == 0;
-	}
+
 	operator double() const {
 		return Denominator != 0 ? (double)Numerator / (double)Denominator
 			: std::numeric_limits<double>::quiet_NaN();
 	}
+
+	bool IsZero() const { return Numerator == 0.0; }
+	bool IsEmpty() const { return *this == Empty; }
+	bool IsZeroOrEmpty() { return (IsZero() || IsEmpty()); }
+
+	bool operator==(Rational const& r) const {
+		return Numerator == r.Numerator && Denominator == r.Denominator;
+	}
+	bool operator!=(Rational const& r) const { return !(*this == r); }
+
+	static const Rational Empty;
 };
+
+inline const Rational Rational::Empty = Rational(0, 0);
 
 class GPSCoordinate {
 public:
@@ -66,21 +79,26 @@ public:
 	CString RelativePos; // north/south of equator for latitude, west/east of Greenwich meridian for longitude
 };
 
+// first is a pointer to the 1st entry in IFD
+// end is a pointer to the byte following the last IFD entry, i.e. pointer to 4-byte offset to next IFD
+struct IFDBounds {
+	uint8* first = nullptr;
+	uint8* end = nullptr;
+	bool isValid() const { return first != nullptr && end != nullptr; }
+};
+
 // Reads and parses the EXIF data of JPEG images
 class CEXIFReader {
 public:
 	// The pApp1Block must point to the APP1 block of the EXIF data, including the APP1 block marker
 	// The class does not take ownership of the memory (no copy made), thus the APP1 block must not be deleted
 	// while the EXIF reader class is deleted.
-	CEXIFReader(void* pApp1Block, EImageFormat eImageFormat);
+	CEXIFReader(void* pApp1Block, EImageFormat eImageFormat, LPCTSTR imagePath);
 
 	// get EXIF data for image given by image path using Exiv2 library
-	CEXIFReader::CEXIFReader(LPCWSTR imagePath);
+	CEXIFReader::CEXIFReader(LPCTSTR imagePath);
 
 	~CEXIFReader(void);
-
-	// Parse date string in the EXIF date/time format
-	static bool ParseExifDateTimeToSysTime(const CString& exifDateTime, SYSTEMTIME& date);
 
 
 public:
@@ -100,6 +118,10 @@ public:
 	bool HasSoftware() { return !_software.IsEmpty(); }
 	LPCTSTR GetSoftware() { return _software; }
 
+	// rating
+	bool HasRating() { return _rating > 0; }
+	int GetRating() { return _rating; }
+
 	// date and time the picture was taken
 	bool HasDateTaken() { return _dateTaken.wYear >= 1970; }
 	const SYSTEMTIME& GetDateTaken() { return _dateTaken; }
@@ -109,7 +131,7 @@ public:
 	const SYSTEMTIME& GetDateModified() { return _dateLastModified; }
 
 	// exposure time
-	bool HasExposureTime() { return !_exposureTime.IsEmpty(); }
+	bool HasExposureTime() { return !_exposureTime.IsZeroOrEmpty(); }
 	const Rational& GetExposureTime() { return _exposureTime; }
 
 	// exposure bias
@@ -145,19 +167,20 @@ public:
 
 	// Image orientation as detected by sensor, coding according EXIF standard (thus no angle in degrees)
 	// valid values are > 0, 0 means that orientation information is not available
-	bool HasImageOrientation() { return _imageOrientation > 0; }
-	int GetImageOrientation() { return _imageOrientation; }
+	bool HasOrientation() { return _orientation > 0; }
+	int GetOrientation() { return _orientation; }
 	
 	// GPS information
-	bool HasGPSLocation() { return _latitude != NULL && _latitude != NULL; }
+	bool HasGPSLocation() { return _latitude != NULL && _longitude != NULL; }
 	GPSCoordinate* GetGPSLatitude() { return _latitude; }
 	GPSCoordinate* GetGPSLongitude() { return _longitude; }
 	bool HasAltitude() { return _altitude != 0.0; } // 0.0 usually indicates that device did not have altitude available at time of image taking
 	double GetGPSAltitude() { return _altitude; }
 
 	// Thumbnail image information
-	bool HasJPEGCompressedThumbnail() { return _hasJpegCompressedThumbnail; }
-	int GetJPEGThumbStreamLen() { return _jpegThumbStreamLength; }
+	bool HasThumb() { return _hasThumb;  }
+	bool ThumbJpegEncoded() { return _thumbJpegEncoded; }
+	int GetThumbSizeInBytes() { return _thumbSizeInBytes; }
 	int GetThumbnailWidth() { return _thumbWidth; }
 	int GetThumbnailHeight() { return _thumbHeight; }
 	
@@ -178,13 +201,15 @@ public:
 	double CalcFocalLengthEquiv(double focalLength);
 
 private:
-	void TransferImageMeta(Exiv2Parser::imageMetadata& imageMeta);
+	void populateFromImageMeta(Exiv2Parser::imageMetadata& imageMeta);
+	IFDBounds resolveIFD(uint32 offset, uint8* pTiff, size_t app1Size, const char* errMsg);
 
 	CString _make = _T("");
 	CString _model = _T("");
 	CString _userComment = _T("");
 	CString _description = _T("");
 	CString _software = _T("");
+	uint32_t _rating = 0;
 
 	SYSTEMTIME _dateTaken = {};
 	SYSTEMTIME _dateLastModified = {};
@@ -194,27 +219,32 @@ private:
 	double _aperture = 0.0;
 	uint32_t _isoSpeed = 0;
 	bool _flashFired = false;
-	uint32_t m_WhiteBalanceMode = 0;
-	uint32_t _imageOrientation = 0;
+	uint32_t _whiteBalanceMode = 0;
+	uint32_t _orientation = 0;
 
 	CString _lensName = _T("");
 	Rational m_LensInfo[4]; 
 	double _focalLength = 0.0;
 	double _focalLengthEquivalent = 0.0;
 	
-	bool _hasJpegCompressedThumbnail = false;
+	bool _hasThumb = false;
+	bool _thumbJpegEncoded = false;
 	uint32_t _thumbWidth = 0;
 	uint32_t _thumbHeight = 0;
-	uint32_t _jpegThumbStreamLength = 0;
+	uint32_t _thumbSizeInBytes = 0;
 
 	GPSCoordinate* _latitude = NULL;
 	GPSCoordinate* _longitude = NULL;
 	double _altitude = 0.0;
 
 	bool _littleEndian = false;
+	
+	EImageFormat _imageFormat = IF_Unknown;
 	uint8* _pApp1 = NULL;
-	uint8* _pTagOrientation = NULL;
-	uint8* _pLastIFD0 = NULL;
-	uint8* _pIFD1 = NULL;
-	uint8* _plastIFD1 = NULL;
+	uint8* _pFirstEntryIFD0 = NULL;
+	uint8* _pEndIFD0 = NULL;
+	uint8* _pFirstEntryIFD1 = NULL;
+	uint8* _pEndIFD1 = NULL;
+	uint8* _pFirstEntryExifIFD = NULL;
+	uint8* _pEndExifIFD = NULL;
 };

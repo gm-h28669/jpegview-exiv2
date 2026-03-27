@@ -418,7 +418,7 @@ CJPEGImage* PsdReader::ReadImage(LPCTSTR strFileName, bool& bOutOfMemory)
 				*pImage32++ = Helpers::AlphaBlendBackground(*pImage32, backgroundColor);
 		}
 
-		Image = new CJPEGImage(nWidth, nHeight, pPixelData, pEXIFData, nChannels, 0, IF_PSD, false, 0, 1, 0);
+		Image = new CJPEGImage(strFileName, nWidth, nHeight, pPixelData, pEXIFData, nChannels, 0, IF_PSD, false, 0, 1, 0);
 	} catch (...) {
 		delete Image;
 		Image = NULL;
@@ -527,7 +527,7 @@ CJPEGImage* PsdReader::ReadThumb(LPCTSTR strFileName, bool& bOutOfMemory)
 		}
 
 		if (pPixelData != NULL) {
-			Image = new CJPEGImage(nWidth, nHeight, pPixelData, pEXIFData,
+			Image = new CJPEGImage(NULL, nWidth, nHeight, pPixelData, pEXIFData,
 				nChannels, Helpers::CalculateJPEGFileHash(pBuffer, nJpegSize), IF_JPEG_Embedded, false, 0, 1, 0);
 			Image->SetJPEGComment(Helpers::GetJPEGComment(pBuffer, nJpegSize));
 			Image->SetJPEGChromoSampling(eChromoSubSampling);

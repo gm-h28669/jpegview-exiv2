@@ -5,7 +5,6 @@
 class CHistogram;
 class CLocalDensityCorr;
 class CEXIFReader;
-class CRawMetadata;
 enum TJSAMP;
 
 // Represents a rectangle to dim out in the image
@@ -32,15 +31,10 @@ public:
 	// The pLDC object is used internally only for thumbnail image creation to avoid duplication. In all other situations,
 	// its value must be NULL.
 	// If RAW metadata is specified, ownership of this memory is transferred to this class.
-	CJPEGImage(int nWidth, int nHeight, void* pPixels, void* pEXIFData, int nChannels, 
+	CJPEGImage(LPCTSTR imagePath, int nWidth, int nHeight, void* pPixels, void* pEXIFData, int nChannels, 
 		__int64 nJPEGHash, EImageFormat eImageFormat, bool bIsAnimation, int nFrameIndex, int nNumberOfFrames, int nFrameTimeMs,
-		CLocalDensityCorr* pLDC = NULL, bool bIsThumbnailImage = false, CRawMetadata* pRawMetadata = NULL);
+		CLocalDensityCorr* pLDC = NULL, bool bIsThumbnailImage = false);
 	~CJPEGImage(void);
-
-	// create EXIF reader for use via Exiv2 library, must be called immediately after constructor, before any other method is called. 
-	// This is a "hack" to allow also displaying image information if image was loaded via WICLoader.
-	// WICLoader does not provide EXIF data in the required format, so we will delegate it to Exiv2 library
-	void CreateExifReader(LPCWSTR imagePath);
 
 	// Gets resampled and processed 32 bpp DIB image (up or downsampled).
 	// Parameters:
@@ -320,9 +314,6 @@ public:
 	void SetJPEGComment(LPCTSTR sComment) { m_sJPEGComment = CString(sComment); }
 	LPCTSTR GetJPEGComment() { return m_sJPEGComment; }
 
-	// Gets the metadata for RAW camera images, NULL if none
-	CRawMetadata* GetRawMetadata() { return m_pRawMetadata; }
-
 	// Converts the target offset from 'center of image' based format to pixel coordinate format 
 	static CPoint ConvertOffset(CSize fullTargetSize, CSize clippingSize, CPoint targetOffset);
 
@@ -351,11 +342,14 @@ private:
 		UpSample
 	};
 
+	// for retrieving image metadata via Exiv2 library
+	// can be NULL to avoid using Exiv2 library
+	LPCTSTR m_imagePath;
+
 	// Original pixel data - only rotations and crop are done directly on this data because this is non-destructive
 	// The data is not modified in all other cases
 	void* m_pOrigPixels;
 	void* m_pEXIFData;
-	CRawMetadata* m_pRawMetadata;
 	int m_nEXIFSize;
 	CEXIFReader* m_pEXIFReader;
 	CString m_sJPEGComment;

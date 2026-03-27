@@ -62,12 +62,14 @@ static CBasicProcessing::SIMDArchitecture ToSIMDArchitecture(Helpers::CPUType cp
 // Public interface
 ///////////////////////////////////////////////////////////////////////////////////
 
-CJPEGImage::CJPEGImage(int nWidth, int nHeight, void* pPixels, void* pEXIFData, int nChannels, __int64 nJPEGHash,
+CJPEGImage::CJPEGImage(LPCTSTR imagePath, int nWidth, int nHeight, void* pPixels, void* pEXIFData, int nChannels, __int64 nJPEGHash,
 					   EImageFormat eImageFormat, bool bIsAnimation, int nFrameIndex, int nNumberOfFrames, int nFrameTimeMs,
-					   CLocalDensityCorr* pLDC, bool bIsThumbnailImage, CRawMetadata* pRawMetadata)
+					   CLocalDensityCorr* pLDC, bool bIsThumbnailImage)
 	: m_rotationParams{ 0 },
 	m_fColorCorrectionFactorsNull{ 0 }
 {
+	m_imagePath = imagePath;
+
 	if (nChannels == 3 || nChannels == 4) {
 		m_pOrigPixels = pPixels;
 		m_nOriginalChannels = nChannels;
@@ -86,14 +88,16 @@ CJPEGImage::CJPEGImage(int nWidth, int nHeight, void* pPixels, void* pEXIFData, 
 		m_nEXIFSize = pEXIF[2]*256 + pEXIF[3] + 2;
 		m_pEXIFData = new char[m_nEXIFSize];
 		memcpy(m_pEXIFData, pEXIFData, m_nEXIFSize);
-		m_pEXIFReader = new CEXIFReader(m_pEXIFData, eImageFormat);
+		m_pEXIFReader = new CEXIFReader(m_pEXIFData, eImageFormat, m_imagePath);
+	} else if (m_imagePath != NULL) {
+		m_nEXIFSize = 0;
+		m_pEXIFData = NULL;
+		m_pEXIFReader = new CEXIFReader(m_imagePath);
 	} else {
 		m_nEXIFSize = 0;
 		m_pEXIFData = NULL;
 		m_pEXIFReader = NULL;
 	}
-
-	m_pRawMetadata = pRawMetadata;
 
 	m_nPixelHash = nJPEGHash;
 	m_eImageFormat = eImageFormat;
@@ -158,15 +162,6 @@ CJPEGImage::CJPEGImage(int nWidth, int nHeight, void* pPixels, void* pEXIFData, 
 	memcpy(m_fColorCorrectionFactors, CSettingsProvider::This().ColorCorrectionAmounts(), sizeof(m_fColorCorrectionFactors));
 }
 
-void CJPEGImage::CreateExifReader(LPCWSTR imagePath)
-{ 
-	if (m_nEXIFSize == 0 && m_pEXIFData == NULL && m_pEXIFReader == NULL) {
-		// set up reader to get EXIF data via Exiv2's open and readMetadata functions
-		// in worst case Exiv2 cannot read metadata and EXIF reader will return empty values
-		m_pEXIFReader = new CEXIFReader(imagePath);
-	}
-}
-
 CJPEGImage::~CJPEGImage(void) {
 	delete[] m_pOrigPixels;
 	m_pOrigPixels = NULL;
@@ -199,8 +194,6 @@ CJPEGImage::~CJPEGImage(void) {
 	m_pHistogramThumbnail = NULL;
 	delete m_pCachedProcessedHistogram;
 	m_pCachedProcessedHistogram = NULL;
-	delete m_pRawMetadata;
-	m_pRawMetadata = NULL;
 }
 
 bool CJPEGImage::CanUseLosslessJPEGTransformations() {
@@ -1412,7 +1405,7 @@ CJPEGImage::EResizeType CJPEGImage::GetResizeType(CSize targetSize, CSize source
 }
 
 int CJPEGImage::GetRotationFromEXIF(int nOrigRotation) {
-	if (m_pEXIFReader != NULL && m_pEXIFReader->HasImageOrientation() && CSettingsProvider::This().AutoRotateEXIF()) {
+	if (m_pEXIFReader != NULL && m_pEXIFReader->HasOrientation() && CSettingsProvider::This().AutoRotateEXIF()) {
 
 		// Some tools rotate the pixel data but do not reset the EXIF orientation flag.
 		// In this case the EXIF thumbnail is normally also not rotated.
@@ -1427,7 +1420,7 @@ int CJPEGImage::GetRotationFromEXIF(int nOrigRotation) {
 			}
 		}
 
-		switch (m_pEXIFReader->GetImageOrientation()) {
+		switch (m_pEXIFReader->GetOrientation()) {
 			case 1:
 				m_bRotationByEXIF = true;
 				return 0;
@@ -1443,16 +1436,18 @@ int CJPEGImage::GetRotationFromEXIF(int nOrigRotation) {
 		}
 	}
 
-	if (m_pRawMetadata != NULL && CSettingsProvider::This().AutoRotateEXIF()) {
-		// Only rotate by 90 or 270 deg if not already rotated by camera
-		if (m_pRawMetadata->GetWidth() >= m_pRawMetadata->GetHeight()) {
-			int orientation = m_pRawMetadata->GetOrientation();
-			if ((orientation & 4) != 0) {
-				m_bRotationByEXIF = true;
-				return ((orientation & 1) != 0) ? 270 : 90;
-			}
-		}
-	}
+	// TODO: this needs some more analysis, since separate raw meta data class was removed
+	// if (m_pRawMetadata != NULL && CSettingsProvider::This().AutoRotateEXIF()) {
+	//	// Only rotate by 90 or 270 deg if not already rotated by camera
+	//	if (m_pRawMetadata->GetWidth() >= m_pRawMetadata->GetHeight()) {
+	//		int orientation = m_pRawMetadata->GetOrientation();
+	//		if ((orientation & 4) != 0) {
+	//			m_bRotationByEXIF = true;
+	//			return ((orientation & 1) != 0) ? 270 : 90;
+	//		}
+	//	}
+	//}
+
 	return nOrigRotation;
 }
 
@@ -1505,7 +1500,7 @@ CJPEGImage* CJPEGImage::CreateThumbnailImage() {
 		nHeight = psiSize.cy;
 		pPixels = m_pLDC->GetPSImageAsDIB();
 	}
-	return new CJPEGImage(nWidth, nHeight, pPixels, NULL, 4, -1, IF_CLIPBOARD, false, 0, 1, 0, m_pLDC, true);
+	return new CJPEGImage(NULL, nWidth, nHeight, pPixels, NULL, 4, -1, IF_CLIPBOARD, false, 0, 1, 0, m_pLDC, true);
 }
 
 void CJPEGImage::DrawGridLines(void * pDIB, const CSize& dibSize) {

@@ -20,6 +20,22 @@ namespace EXIFHelpers {
 		}
 	}
 
+	static bool ParseExifDateTimeToSysTime(const CString& exifDateTime, SYSTEMTIME& date) {
+		int year, month, day, hour, minute, second;
+		if (_stscanf(exifDateTime, _T("%d:%d:%d %d:%d:%d"), &year, &month, &day, &hour, &minute, &second) == 6) {
+			date.wYear = year;
+			date.wMonth = month;
+			date.wDay = day;
+			date.wHour = hour;
+			date.wMinute = minute;
+			date.wSecond = second;
+			date.wMilliseconds = 0;
+			date.wDayOfWeek = 0;
+			return true;
+		}
+		return false;
+	}
+
 	bool SetFileModifiedDate(LPCTSTR sFileName, const SYSTEMTIME& time) {
 		HANDLE hFile = ::CreateFile(sFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
 		if (hFile == INVALID_HANDLE_VALUE) {
@@ -54,7 +70,7 @@ namespace EXIFHelpers {
 				if (pBitmap->GetPropertyItem(PropertyTagExifDTOrig, nSize, pItem) == Gdiplus::Ok) {
 					SYSTEMTIME time;
 					CString dateTaken = CString((LPCSTR)pItem->value);
-					if (CEXIFReader::ParseExifDateTimeToSysTime(dateTaken, time)) {
+					if (ParseExifDateTimeToSysTime(dateTaken, time)) {
 						delete pBitmap; pBitmap = NULL; // else the file is locked
 						TIME_ZONE_INFORMATION tzi;
 						::GetTimeZoneInformation(&tzi);

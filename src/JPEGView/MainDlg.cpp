@@ -3242,12 +3242,9 @@ void CMainDlg::UpdateWindowTitle() {
 		sWindowText += Helpers::GetMultiframeIndex(m_pCurrentImage);
 		if (CSettingsProvider::This().ShowEXIFDateInTitle()) {
 			CEXIFReader* pEXIF = m_pCurrentImage->GetEXIFReader();
-			CRawMetadata* pRawMetadata = m_pCurrentImage->GetRawMetadata();
 			if (pEXIF != NULL && pEXIF->GetDateTaken().wYear > 1600) {
 				sWindowText += " - " + Helpers::SystemTimeToString(pEXIF->GetDateTaken());
-			} else if (pRawMetadata != NULL && pRawMetadata->HasDateTaken()) {
-				sWindowText += " - " + Helpers::SystemTimeToString(pRawMetadata->GetDateTaken());
-			}
+			} 
 		}
 		sWindowText += " - " + CString(JPEGVIEW_TITLE);
 		this->SetWindowText(sWindowText);

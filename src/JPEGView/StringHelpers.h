@@ -3,6 +3,9 @@
 
 namespace StringHelpers
 {
-    std::string WideToUtf8(LPCWSTR wstr);
+    std::string toUTF8(LPCWSTR wstr);
+    std::string toUpper(const std::string& str);
+    std::string trim(const std::string& str);
+    std::tm parseDateTime(const std::string& exifDateTime, const std::string& format);
 };
 

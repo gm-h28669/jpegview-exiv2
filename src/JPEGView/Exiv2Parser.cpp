@@ -9,126 +9,105 @@
 #include <cstdint> 
 #include <cstring>
 #include <ctime>
-#include <iomanip>
-#include <iostream>
-#include "StringHelpers.h">
+#include "StringHelpers.h"
+#include "Logging.h"
 
-
-#define IS_VALID_TAG(iter, exif) (iter != (exif).end() && (iter)->size())
+#define IS_VALID_EXIF_TAG(iter, exif) (iter != exif.end() && iter->size())
+#define IS_VALID_XMP_TAG(iter, xmp) (iter != xmp.end() && iter->size())
 
 namespace Exiv2Parser {
-    constexpr uint16_t APP1_MARKER = 0xFFE1;
-
-    static void logError(const std::string& errorMessage, const char* functionName) {
-        std::cerr << "E:" << functionName << ": " << errorMessage << std::endl;
-    }
-
-    static std::tm parseDateTime(const std::string& exifDateTime, const std::string& format) {
-        std::tm tm = {};
-        std::istringstream ss(exifDateTime);
-        ss >> std::get_time(&tm, format.c_str());
-        if (ss.fail()) {
-            // handle parse failure (tm stays zeroed)
-            logError("Failed to parse date: " + exifDateTime, __func__);
-        }
-        return tm;
-    }
-
     static bool findExifTag(Exiv2::ExifData& exif, std::string key, Exiv2::ExifData::const_iterator& iter) {
         iter = exif.findKey(Exiv2::ExifKey(key));
         return (iter != exif.end() && iter->size() > 0);
     }
 
-    static std::string toUpper(const std::string& str) {
-        std::string result = str;
-        std::transform(result.begin(), result.end(), result.begin(), ::toupper);
-        return result;
+    static bool findXmpTag(Exiv2::XmpData& xmp, std::string key, Exiv2::XmpData::const_iterator& iter) {
+        iter = xmp.findKey(Exiv2::XmpKey(key));
+        return (iter != xmp.end() && iter->size() > 0);
     }
 
-    static std::string trim(const std::string& str) {
-        size_t first = str.find_first_not_of(" \t\n\r\f\v");
-        size_t last = str.find_last_not_of(" \t\n\r\f\v");
-        return (first == std::string::npos) ? "" : str.substr(first, (last - first + 1));
+    static void loadXmpMeta(Exiv2::XmpData& xmp, Exiv2Parser::imageMetadata& imageMeta) {
+        Exiv2::XmpData::const_iterator iter;
+
+        // get image rating
+        if (findXmpTag(xmp, "Xmp.xmp.Rating", iter)) {
+            imageMeta.rating = iter->value().toUint32();
+        }
+
     }
 
-    double convertRationalToDouble(const rational& number) {
-        return (number.Denominator != 0)
-            ? (double)number.Numerator / number.Denominator
-            : std::numeric_limits<double>::quiet_NaN();
-    }
-
-    static void loadImageMetadata(Exiv2::ExifData& exif, Exiv2Parser::imageMetadata& imageMeta) {
+    static void loadExifMeta(Exiv2::ExifData& exif, Exiv2Parser::imageMetadata& imageMeta) {
         Exiv2::ExifData::const_iterator iter;
 
         // get camera make
         iter = Exiv2::make(exif);
-        if (IS_VALID_TAG(iter, exif)) {
-            imageMeta.make = trim(iter->value().toString());
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
+            imageMeta.make = StringHelpers::trim(iter->value().toString());
         }
 
         // get camera model
         iter = Exiv2::model(exif);
-        if (IS_VALID_TAG(iter, exif)) {
-            imageMeta.model = trim(iter->value().toString());
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
+            imageMeta.model = StringHelpers::trim(iter->value().toString());
         }
 
         // get user comment
         if (findExifTag(exif, "Exif.Photo.UserComment", iter)) {
-            imageMeta.userComment = trim(iter->value().toString());
+            imageMeta.userComment = StringHelpers::trim(iter->value().toString());
         }
 
         // get description
         if (findExifTag(exif, "Exif.Image.ImageDescription", iter)) {
-            imageMeta.description = trim(iter->value().toString());
+            imageMeta.description = StringHelpers::trim(iter->value().toString());
         }
 
         // get software that created the image
         if (findExifTag(exif, "Exif.Image.Software", iter)) {
-            imageMeta.software = trim(iter->value().toString());
+            imageMeta.software = StringHelpers::trim(iter->value().toString());
         }
 
         // get date taken
         iter = Exiv2::dateTimeOriginal(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             std::string dateTaken = iter->value().toString();
-            imageMeta.dateTaken = parseDateTime(dateTaken, "%Y:%m:%d %H:%M:%S");
+            imageMeta.dateTaken = StringHelpers::parseDateTime(dateTaken, "%Y:%m:%d %H:%M:%S");
         }
 
         // get date modified (this is the date when exif metadata was last modified)
         if (findExifTag(exif, "Exif.Image.DateTime", iter)) {
             std::string dateModified = iter->value().toString();
-            imageMeta.dateModified = parseDateTime(dateModified, "%Y:%m:%d %H:%M:%S");
+            imageMeta.dateModified = StringHelpers::parseDateTime(dateModified, "%Y:%m:%d %H:%M:%S");
         }
 
         // get image orientation
         iter = Exiv2::orientation(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             imageMeta.orientation = iter->value().toUint32();
         }
 
         // get exposure time (shutter speed)
         iter = Exiv2::exposureTime(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             Exiv2::Rational exposureTime = iter->value().toRational();
             imageMeta.exposureTime = rational{ exposureTime.first, exposureTime.second };
         }
 
         // get exposure bias (EV compensation)
         iter = Exiv2::exposureBiasValue(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             Exiv2::Rational exposureBias = iter->value().toRational();
             imageMeta.exposureBias = rational{ exposureBias.first, exposureBias.second };
         }
 
         // get aperture (f-number)
         iter = Exiv2::fNumber(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             imageMeta.aperture = iter->value().toFloat();
         }
 
         // get ISO speed
         iter = Exiv2::isoSpeed(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             imageMeta.isoSpeed = iter->value().toUint32();
         }
         else {
@@ -140,13 +119,13 @@ namespace Exiv2Parser {
 
         // get white balance mode
         iter = Exiv2::whiteBalance(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             imageMeta.whiteBalance = iter->value().toUint32();
         }
 
         // get flash fired
         iter = Exiv2::flash(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             uint32_t flashValue = iter->value().toUint32();
             // bit 0 of the flash value indicates whether flash was fired or not
             imageMeta.flashFired = (flashValue & 0x01) != 0;
@@ -154,7 +133,7 @@ namespace Exiv2Parser {
 
         // get lens model
         iter = Exiv2::lensName(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             imageMeta.lensName = iter->print(&exif);
         }
 
@@ -171,7 +150,7 @@ namespace Exiv2Parser {
 
         // get focal length
         iter = Exiv2::focalLength(exif);
-        if (IS_VALID_TAG(iter, exif)) {
+        if (IS_VALID_EXIF_TAG(iter, exif)) {
             Exiv2::Rational focalLength = iter->value().toRational();
             imageMeta.focalLength = focalLength.second != 0
                 ? static_cast<double>(focalLength.first) / focalLength.second
@@ -186,7 +165,7 @@ namespace Exiv2Parser {
         // get GPS latitude relative to equator: N or S
         bool hasLatitude = findExifTag(exif, "Exif.GPSInfo.GPSLatitudeRef", iter);
         if (hasLatitude) {
-            std::string latitudeRef = trim(iter->value().toString());
+            std::string latitudeRef = StringHelpers::trim(iter->value().toString());
             imageMeta.gps.latitude.relativePos = latitudeRef;
         }
 
@@ -207,7 +186,7 @@ namespace Exiv2Parser {
         // get GPS longitude relative to Greenwich meridian: E or W
         bool hasLongitude = findExifTag(exif, "Exif.GPSInfo.GPSLongitudeRef", iter);
         if (hasLongitude) {
-            std::string longitudeRef = trim(iter->value().toString());
+            std::string longitudeRef = StringHelpers::trim(iter->value().toString());
             imageMeta.gps.longitude.relativePos = longitudeRef;
         }
 
@@ -240,94 +219,89 @@ namespace Exiv2Parser {
         imageMeta.loaded = true;
     }
 
-    imageMetadata getExifMetadata(const uint8_t* pApp1Block) {
+    static void loadImageMeta(Exiv2::Image::UniquePtr& image, Exiv2Parser::imageMetadata& imageMeta) {
+        image->readMetadata();
+
+        // get EXIF metadata
+        Exiv2::ExifData& exif = image->exifData();
+        if (exif.empty()) {
+            LOG_WARNING("No Exif metadata found in image");
+        }
+        loadExifMeta(exif, imageMeta);
+
+        // get XMP metadata
+        Exiv2::XmpData& xmp = image->xmpData();
+        if (xmp.empty()) {
+            LOG_WARNING("No XMP metadata found in image");
+        }
+        loadXmpMeta(xmp, imageMeta);
+
+        // get thumbnail image metadata (if available)
+        Exiv2::PreviewManager mgr(*image);
+        auto props = mgr.getPreviewProperties(); // sorted smallest->largest
+        if (!props.empty()) {
+            auto info = props.back();            // previews sorted from smalleest to largest, get largest available preview
+            Exiv2::PreviewImage preview = mgr.getPreviewImage(info);
+            imageMeta.thumbWidth = preview.width();
+            imageMeta.thumbHeight = preview.height();
+            imageMeta.thumbJpegEncoded = (preview.mimeType() == "image/jpeg");
+            imageMeta.thumbSizeInBytes = static_cast<int>(preview.size());
+            imageMeta.hasThumb = true;
+        }
+        else {
+            imageMeta.hasThumb = false;
+        }
+    }
+
+    double ConvertRationalToDouble(const rational& number) {
+        return (number.Denominator != 0)
+            ? (double)number.Numerator / number.Denominator
+            : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    // expects pointer to TIFF header (start immediately after EXIF header within APP1 segment)
+	// expects size of the TIFF data in bytes (from TIFF header to the end of EXIF metadata, including all IFDs and values)
+    imageMetadata GetImageMeta(const uint8_t* pTiff, size_t tiffSize) {
         imageMetadata imageMeta;
-
-        // check if APP1 segment starts with the correct marker
-        if ((!pApp1Block || ((pApp1Block[0] << 8) | pApp1Block[1]) != APP1_MARKER)) {
-            logError("Invalid APP1 segment: missing or incorrect marker", __func__);
-            return imageMeta;
-        }
-
-		// get length of APP1 segment (big endian) : includes the two length bytes
-        int app1Size = (pApp1Block[2] << 8) | pApp1Block[3];
-
-        // calculate length of exif segment
-        const Exiv2::byte* exifPtr = pApp1Block + 4;          // starts after marker and length = offset 4
-        size_t exifSize = static_cast<size_t>(app1Size - 2); // APP1 segment length includes the two length bytes, segment = L-2
-
-        // basic sanity check
-        if (exifSize < 6) {
-            logError("APP1 segment too short to contain valid EXIF data", __func__);
-            return imageMeta;
-        }
-
-        // EXIF segment expected to start with "Exif\0\0"
-        const unsigned char exifHeader[] = { 'E', 'x', 'i', 'f', 0, 0 };
-        if (memcmp(exifPtr, exifHeader, 6) != 0) {
-            // Not the expected EXIF signature
-            logError("APP1 segment does not start with expected EXIF header", __func__);
-            return imageMeta;
-        }
-        
-		// TIFF header starts immediately after the "Exif\0\0" header, so offset by 6 bytes
-        const Exiv2::byte* tiffPtr = exifPtr + 6;
-        size_t tiffSize = exifSize - 6;
-
-        // TIFF segment consists at least of: 2 (byte order) + 2 (magic) + 4 (offset to 0th IFD) = 8 bytes
-        if (tiffSize < 8) {
-            logError("Invalid TIFF header: length must be at least 8 bytes", __func__);
-            return imageMeta;
-        }
-
-        const unsigned char* p = reinterpret_cast<const unsigned char*>(tiffPtr);
-        // little-endian ("II")
-        imageMeta.littleEndian = (p[0] == 'I' && p[1] == 'I');
-
         try {
-            Exiv2::ExifData exif;
-            Exiv2::ExifParser::decode(exif, tiffPtr, static_cast<long>(tiffSize));
+            auto io = std::make_unique<Exiv2::MemIo>(pTiff, tiffSize);
+            auto image = Exiv2::ImageFactory::open(std::move(io));
+            if (!image) {
+                LOG_ERROR("Image cration from TIFF failed");
+            }
 
+            //Exiv2::ExifData exif;
+            //Exiv2::ExifParser::decode(exif, (const Exiv2::byte*)pTiff, static_cast<long>(tiffSize));
+            //Exiv2::ExifData& exif = image->exifData();
+            //loadExifMeta(exif, imageMeta);
 
-            loadImageMetadata(exif, imageMeta);
+            loadImageMeta(image, imageMeta);
             return imageMeta;
         }
         catch (Exiv2::Error& e) {
-            logError(std::string("Exif parsing error: ") + e.what(), __func__);
+            LOG_ERROR(std::string("Exiv2 exception: ") + e.what());
         }
 
         imageMeta.loaded = true;
         return imageMeta;
     }
 
-    imageMetadata getExifMetadata(LPCWSTR imagePath) {
+    imageMetadata GetImageMeta(LPCWSTR imagePath) {
         imageMetadata imageMeta;
 
-        std::string imagePathUtf8 = StringHelpers::WideToUtf8(imagePath);
-        Exiv2::Image::UniquePtr image = Exiv2::ImageFactory::open(imagePath);
-        if (!image) {
-            logError("Failed to open image: " + imagePathUtf8, __func__);
-            return imageMeta;
-        }
-
         try {
-            image->readMetadata();
-
-			// get indication if little or big endian byte order is used in the EXIF metadata
-            Exiv2::ByteOrder byteOrder = image->byteOrder();
-            imageMeta.littleEndian = (byteOrder == Exiv2::littleEndian);
-
-            Exiv2::ExifData& exif = image->exifData();
-
-            if (exif.empty()) {
-                logError("No Exif metadata found in image" + imagePathUtf8, __func__);
+            std::string imagePathUtf8 = StringHelpers::toUTF8(imagePath);
+            Exiv2::Image::UniquePtr image = Exiv2::ImageFactory::open(imagePath);
+            if (!image) {
+                LOG_ERROR("Failed to open image: " + imagePathUtf8);
+                return imageMeta;
             }
 
-            loadImageMetadata(exif, imageMeta);
+            loadImageMeta(image, imageMeta);
             return imageMeta;
         }
         catch (Exiv2::Error& e) {
-            logError(std::string("Exif parsing error: ") + e.what(), __func__);
+            LOG_ERROR(std::string("Exiv2 exception: ") + e.what());
         }
     }
 }

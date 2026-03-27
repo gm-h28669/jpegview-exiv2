@@ -5,17 +5,30 @@
 #include "EXIFHelpers.h"
 #include "Exiv2Parser.h"
 #include <vector>
+#include <cassert>
+#include "Logging.h"
+#include <tuple>
+
+constexpr uint16_t APP1_MARKER = 0xFFE1;
+constexpr unsigned char EXIF_HEADER[6] = { 'E','x','i','f', 0, 0 };
+constexpr unsigned char TIFF_HEADER_LITTLE_ENDIAN[4] = { 'I', 'I', 0x2A, 0x00 };
+constexpr unsigned char TIFF_HEADER_BIG_ENDIAN[4] = { 'M', 'M', 0x00, 0x2A };
+constexpr size_t TIFF_HEADER_LEN = 8;		// TIFF header consists of: 2 (byte order) + 2 (magic) + 4 (offset to 0th IFD) = 8 bytes
+constexpr size_t IFD_ENTRY_LEN = 12;		// each IFD entry is 12 bytes long
+
+enum ByteOrder {
+	LittleEndian = 0,
+	BigEndian = 1,
+	Invalid = 2
+};
 
 // only left tags that are still used to access EXIF direclty and not through Exiv2 library
 namespace EXIF {
 	// IFD0 Tags (TIFF/EXIF Image IFD)
 	constexpr uint16 TAG_ORIENTATION = 0x0112;
-	constexpr uint16 TAG_EXIF_IFD = 0x8769;
+	constexpr uint16 TAG_EXIF_SUBIFD = 0x8769;
 
 	// IFD1 Thumbnail Tags (TIFF)
-	constexpr uint16 TAG_IMAGE_WIDTH = 0x0100;  // ImageWidth (for thumb)
-	constexpr uint16 TAG_IMAGE_HEIGHT = 0x0101;  // ImageHeight (for thumb)
-	constexpr uint16 TAG_COMPRESSION = 0x0103;
 	constexpr uint16 TAG_JPEG_INTERCHANGE = 0x0201;  // JPEGInterchangeFormat
 	constexpr uint16 TAG_JPEG_INTERCHANGE_LEN = 0x0202;
 
@@ -26,9 +39,6 @@ namespace EXIF {
 	// TIFF Header Byte Order (bytes 0-1)
 	constexpr uint16 TIFF_LITTLE_ENDIAN = 0x4949;
 	constexpr uint16 TIFF_BIG_ENDIAN = 0x4D4D;
-
-	// TIFF Magic Number (bytes 2-3) - always 42
-	constexpr uint16 TIFF_VERSION = 0x002A;
 }
 
 static uint32 ReadUInt(void* ptr, bool littleEndian) {
@@ -65,8 +75,8 @@ static void WriteUShort(void* ptr, uint16 value, bool littleEndian) {
 	*((uint16*)ptr) = val;
 }
 
-static uint8* FindTag(uint8* ptr, uint8* ptrLast, uint16 tag, bool littleEndian) {
-	while (ptr < ptrLast) {
+static uint8* FindTag(uint8* ptr, uint8* ptrEnd, uint16 tag, bool littleEndian) {
+	while (ptr < ptrEnd) {
 		if (ReadUShort(ptr, littleEndian) == tag) {
 			return ptr;
 		}
@@ -83,26 +93,6 @@ static uint32 ReadLongTag(uint8* ptr, bool littleEndian) {
 	}
 }
 
-static uint16 ReadShortTag(uint8* ptr, bool littleEndian) {
-	if (ptr != NULL && ReadUShort(ptr + 2, littleEndian) == EXIF::TYPE_SHORT) {
-		return ReadUShort(ptr + 8, littleEndian);
-	} else {
-		return 0;
-	}
-}
-
-static uint32 ReadShortOrLongTag(uint8* ptr, bool littleEndian) {
-	if (ptr != NULL) {
-		uint16 nType = ReadUShort(ptr + 2, littleEndian);
-		if (nType == EXIF::TYPE_SHORT) {
-			return ReadUShort(ptr + 8, littleEndian);
-		} else if (nType == EXIF::TYPE_LONG) {
-			return ReadUInt(ptr + 8, littleEndian);
-		}
-	}
-	return 0;
-}
-
 static void WriteShortTag(uint8* ptr, uint16 value, bool littleEndian) {
 	if (ptr != NULL && ReadUShort(ptr + 2, littleEndian) == EXIF::TYPE_SHORT) {
 		WriteUShort(ptr + 8, value, littleEndian);
@@ -115,29 +105,13 @@ static void WriteLongTag(uint8* ptr, uint32 value, bool littleEndian) {
 	}
 }
 
-bool CEXIFReader::ParseExifDateTimeToSysTime(const CString& exifDateTime, SYSTEMTIME& date) {
-	int year, month, day, hour, minute, second;
-	if (_stscanf(exifDateTime, _T("%d:%d:%d %d:%d:%d"), &year, &month, &day, &hour, &minute, &second) == 6) {
-		date.wYear = year;
-		date.wMonth = month;
-		date.wDay = day;
-		date.wHour = hour;
-		date.wMinute = minute;
-		date.wSecond = second;
-		date.wMilliseconds = 0;
-		date.wDayOfWeek = 0;
-		return true;
-	}
-	return false;
-}
-
 CString FormatDate(const std::tm& tm, const char* format) {
 	char buffer[64];
 	strftime(buffer, sizeof(buffer), format, &tm);
 	return CString(buffer);
 }
 
-void tmToSystemTime(const std::tm& tm, SYSTEMTIME& st) {
+static void tmToSystemTime(const std::tm& tm, SYSTEMTIME& st) {
 	st.wYear = tm.tm_year + 1900;
 	st.wMonth = tm.tm_mon + 1;
 	st.wDayOfWeek = 0;           // Calculate if needed: mktime(&ptm)->tm_wday
@@ -149,7 +123,7 @@ void tmToSystemTime(const std::tm& tm, SYSTEMTIME& st) {
 }
 
 // case-insensitive full match: if str fully matches any of the targets (ignoring case), return replacement, otherwise return str
-CString getReplacementOnExactMatch(const CString& str, const CString& replacement, const std::vector<CString>& targets) {
+static CString getReplacementOnExactMatch(const CString& str, const CString& replacement, const std::vector<CString>& targets) {
 	for (const auto& target : targets) {
 		if (_tcsicmp(str, target) == 0) {
 			return replacement;
@@ -159,161 +133,196 @@ CString getReplacementOnExactMatch(const CString& str, const CString& replacemen
 }
 
 // case-insensitive partial match: if str contains target (ignoring case), return target, otherwise return str
-CString getTargetIfContained(const CString& str, const CString target) {
+static CString getTargetIfContained(const CString& str, const CString target) {
 	if (EXIFHelpers::ContainsCaseInsensitive(str, target)) {
 		return target;
 	}
 	return str;
 }
 
-CEXIFReader::CEXIFReader(void* pApp1Block, EImageFormat eImageFormat)
+static bool isValidApp1Marker(const uint8_t* pApp1) {
+	if (!pApp1) return false;
+	uint16_t marker = (pApp1[0] << 8) | pApp1[1];
+	return marker == APP1_MARKER;
+}
+
+static bool isValidExifHeader(const uint8_t* pExif, size_t exifSize) {
+	if (!pExif || exifSize < sizeof(EXIF_HEADER)) return false;
+	return std::memcmp(pExif, EXIF_HEADER, sizeof(EXIF_HEADER)) == 0;
+}
+
+static bool isValidTiffHeader(const uint8_t* pTiff, size_t tiffSize) {
+	if (pTiff == NULL || tiffSize < TIFF_HEADER_LEN) return false;
+
+	// "II" 0x2A or "MM" 0x2A
+	if (std::memcmp(pTiff, TIFF_HEADER_LITTLE_ENDIAN, sizeof(TIFF_HEADER_LITTLE_ENDIAN)) == 0 ||
+		std::memcmp(pTiff, TIFF_HEADER_BIG_ENDIAN, sizeof(TIFF_HEADER_BIG_ENDIAN)) == 0) {
+		return true;
+	}
+	return false;
+}
+
+static ByteOrder getByteOrder(const uint8_t* pTiff, size_t tiffSize) {
+	uint16_t byteOrder = (pTiff[0] << 8) | pTiff[1];
+	if (byteOrder == EXIF::TIFF_LITTLE_ENDIAN) {
+		return ByteOrder::LittleEndian;
+	} else if (byteOrder == EXIF::TIFF_BIG_ENDIAN) {
+		return ByteOrder::BigEndian;
+	} else {
+		return ByteOrder::Invalid;
+	}
+}
+
+static bool isWithinApp1(const uint8* ptr, const uint8* pApp1, size_t app1Size) {
+	// APP1 size does not include the 2 bytes of APP1 marker, so add them to the end boundary check
+	return (ptr >= pApp1) && (ptr < pApp1 + app1Size + 2);
+}
+
+// validates an IFD segment and returns the pointer to the first IFD entry and to the end of the IFD entries
+// returns NULL if the IFD is invalid or out of bounds.
+static std::pair<uint8*, uint8*> getBoundsIFDEntries(uint8* pIFD, uint8* pApp1, uint32 app1Size, bool littleEndian) {
+	// validate IFD segment start is within APP1 boundaries
+	if (!pIFD || !isWithinApp1(pIFD, pApp1, app1Size)) {
+		return std::make_pair((uint8*) NULL, (uint8*) NULL);
+	}
+
+	// read number of entries (2 bytes)
+	uint16 numTags = ReadUShort(pIFD, littleEndian);
+
+	// calculate pointer to 1st IFD entry (skipping the 2-byte count)
+	uint8* pFirstEntry = pIFD + 2;
+
+	// calculate pointer to byte following last IFD entry (pointer will point to 4-byte offset to next IFD segment
+	uint8* pEndIFD = pFirstEntry + (numTags * IFD_ENTRY_LEN);
+
+	// validate IFD segment end is within APP1 boundaries
+	if (!isWithinApp1(pEndIFD + 4, pApp1, app1Size)) {
+		return std::make_pair((uint8*)NULL, (uint8*)NULL);
+	}
+
+	return std::make_pair(pFirstEntry, pEndIFD);
+}
+
+IFDBounds CEXIFReader::resolveIFD(uint32 offset, uint8* pTiff, size_t app1Size, const char* errMsg) {
+	// if offset is 0, the IFD simply doesn't exist (not an error for optional IFDs)
+	if (offset == 0) {
+		return { NULL, NULL };
+	}
+
+	// calculate and validate the pointer to the IFD start
+	uint8* pIFD = pTiff + offset;
+	if (!isWithinApp1(pIFD, _pApp1, app1Size)) {
+		LOG_ERROR(errMsg);
+		return { NULL, NULL };
+	}
+
+	// get the boundaries (start and end of IFD entries)
+	auto bounds = getBoundsIFDEntries(pIFD, _pApp1, app1Size, _littleEndian);
+
+	// validate the bounds
+	if (bounds.first == NULL || bounds.second == NULL) {
+		LOG_ERROR(errMsg);
+		return { NULL, NULL };
+	}
+
+	// return the IFD segment pointers
+	return { (uint8*)bounds.first, (uint8*)bounds.second };
+}
+
+CEXIFReader::CEXIFReader(void* pApp1, EImageFormat eImageFormat, LPCTSTR imagePath)
 	: _exposureTime { 0, 0 },
 	_dateTaken{ 0 },
 	_dateLastModified{ 0 }
 {
-	// check if APP1 marker valid
-	_pApp1 = (uint8*)pApp1Block;
-	if (_pApp1[0] != 0xFF || _pApp1[1] != 0xE1) {
-		return;
-	}
-	int app1Size = _pApp1[2]*256 + _pApp1[3] + 2;
+	assert(pApp1 != NULL);
+	if (imagePath != NULL) assert(_tcslen(imagePath) > 0);
 
-	// read TIFF header
-	uint8* pTIFFHeader = _pApp1 + 10;
-	bool littleEndian;
-	if (*(short*)pTIFFHeader == EXIF::TIFF_LITTLE_ENDIAN) {
-		littleEndian = true;
-	} else if (*(short*)pTIFFHeader == EXIF::TIFF_BIG_ENDIAN) {
-		littleEndian = false;
-	} else {
-		return;
-	}
-	_littleEndian = littleEndian;
+	_pApp1 = (uint8*)pApp1;
+	_imageFormat = eImageFormat;
 
-	// ensure IFD0 segment lays within the APP1 block
-	uint8* pIFD0 = pTIFFHeader + ReadUInt(pTIFFHeader + 4, littleEndian);
-	if (pIFD0 - _pApp1 >= app1Size) {
+	// APP1 segment must start with correct marker
+	if (!isValidApp1Marker(_pApp1)) {
+		LOG_ERROR("APP1 segment invalid");
 		return;
 	}
 
-	// get IFD0 segment info: pointer to the first IFD0 tag and pointer to the end of the IFD0 segment
-	// this info is required for searching tags in IFD0
-	uint16 numTags = ReadUShort(pIFD0, littleEndian);
-	pIFD0 += 2;
-	uint8* pLastIFD0 = pIFD0 + numTags*12;
-	if (pLastIFD0 - _pApp1 + 4 >= app1Size) {
+	// get length of APP1 segment after marker, the length includes also the two length bytes
+	size_t app1Size = (_pApp1[2] << 8) | _pApp1[3];			// length encoded in big endian order
+
+	// EXIF segment must start with the correct header
+	uint8* pExif = _pApp1 + 4;				// EXIF segment starts after marker and length = offset 4
+	size_t exifSize = app1Size - 2;			// subtract 2, since APP1 segment length includes the two length bytes
+	if (!isValidExifHeader(pExif, exifSize)) {
+		LOG_ERROR("EXIF header invalid");
 		return;
 	}
-	_pLastIFD0 = pLastIFD0;
 
-	// get offset to IFD1 segment (thumbnail image)
-	uint32 offsetIFD1 = ReadUInt(pLastIFD0, littleEndian);
+	// data in EXIF segment is stored in TIFF format, TIFF header starts immediately after the EXIF header
+	uint8* pTiff = pExif + sizeof(EXIF_HEADER);
+	size_t tiffSize = exifSize - sizeof(EXIF_HEADER);
 
-	// get EXIF segment info: pointer to the first EXIF tag and pointer to the end of the EXIF segment
-	uint8* pTagEXIFIFD = FindTag(pIFD0, pLastIFD0, EXIF::TAG_EXIF_IFD, littleEndian);
-	bool hasExifSegment = (pTagEXIFIFD != NULL);
-
-	uint8* pEXIFIFD = NULL;
-	uint8* pLastEXIF = NULL;
-
-	if (hasExifSegment) {
-		uint32 offsetEXIF = ReadLongTag(pTagEXIFIFD, littleEndian);
-		if (offsetEXIF == 0) {
-			return;
-		}
-		pEXIFIFD = pTIFFHeader + offsetEXIF;
-		if (pEXIFIFD - _pApp1 >= app1Size) {
-			return;
-		}
-		numTags = ReadUShort(pEXIFIFD, littleEndian);
-		pEXIFIFD += 2;
-		pLastEXIF = pEXIFIFD + numTags * 12;
-		if (pLastEXIF - _pApp1 >= app1Size) {
-			return;
-		}
+	// TIFF segment must start with correct header (different depending on byte order)
+	if (!isValidTiffHeader(pTiff, tiffSize)) {
+		LOG_ERROR("TIFF header invalid");
+		return;
 	}
 
-	// orientation tags must be ignored for JXL and HEIF/AVIF
-	if (eImageFormat != IF_JXL && eImageFormat != IF_HEIF && eImageFormat != IF_AVIF) {
-		// hack: old code keeps a pointer to the orientation entry in EXIF
-		// it needs it when saving the image (to preserve the original orientation)
-		_pTagOrientation = FindTag(pIFD0, pLastIFD0, EXIF::TAG_ORIENTATION, littleEndian);
+	// get byte order (endianness) from TIFF header
+	ByteOrder byteOrder = getByteOrder(pTiff, tiffSize);
+	_littleEndian = (byteOrder == ByteOrder::LittleEndian);
+
+	// resolve IFD0 (Mandatory)
+	uint32 offsetIFD0 = ReadUInt(pTiff + 4, _littleEndian);
+	auto ifd0 = resolveIFD(offsetIFD0, pTiff, app1Size, "IFD0 segment invalid");
+	if (!ifd0.isValid()) return;
+	_pFirstEntryIFD0 = ifd0.first;
+	_pEndIFD0 = ifd0.end;
+
+	// resolve IFD1 (optional - thumbnail)
+	uint32 offsetIFD1 = ReadUInt(_pEndIFD0, _littleEndian);
+	auto ifd1 = resolveIFD(offsetIFD1, pTiff, app1Size, "IFD1 segment invalid");
+	_pFirstEntryIFD1 = ifd1.first;
+	_pEndIFD1 = ifd1.end;
+
+	// resolve EXIF SubIFD (optional)
+	uint8* pTagExifSubIFD = FindTag(_pFirstEntryIFD0, _pEndIFD0, EXIF::TAG_EXIF_SUBIFD, _littleEndian);
+	if ((pTagExifSubIFD != NULL)) {
+		uint32 offsetExif = ReadLongTag(pTagExifSubIFD, _littleEndian);
+		auto exifSub = resolveIFD(offsetExif, pTiff, app1Size, "EXIF IFD segment invalid");
+		_pFirstEntryExifIFD = exifSub.first;
+		_pEndExifIFD = exifSub.end;
 	}
-	
-	// new implementation gets EXIF metadata using Exiv2 library
-	// Exiv2 library returns more accurate values for some tags (e.g. focal length, lens name, etc)
-	// with new approach zhe code will also become more simple to maintain in future
-	Exiv2Parser::imageMetadata imageMeta = Exiv2Parser::getExifMetadata(_pApp1);
+
+	// get EXIF and other image metadata using via Exiv2 library
+	Exiv2Parser::imageMetadata imageMeta;
+	if (pTiff != NULL && tiffSize > 0) {
+		// use EXIF segment that is already in memory
+		imageMeta = Exiv2Parser::GetImageMeta(pTiff, tiffSize);
+	} 
+	else {
+		// fallback: use image path, this will open image in Exiv2, but is lightweight operation
+		imageMeta = Exiv2Parser::GetImageMeta(imagePath);
+	}
 
 	// tranfer data from DTO to member variables of old class, so that the old code can use it without change
-	TransferImageMeta(imageMeta);
-
-	// get IFD1 segment info: pointer to the first IFD1 tag and pointer to the end of the IFD1 segment
-	// this segment contains thumbnail image info and thumbnail itself (if JPEG compressed thumbnail is present)
-	// TODO: get thumbnail info (width, height, compression type, etc) using Exiv2 library 
-	if (offsetIFD1 != 0) {
-		_pIFD1 = pTIFFHeader + offsetIFD1;
-		if (_pIFD1 - _pApp1 >= app1Size || _pIFD1 - _pApp1 < 0) {
-			return;
-		}
-		numTags = ReadUShort(_pIFD1, littleEndian);
-		_pIFD1 += 2;
-		uint8* pLastIFD1 = _pIFD1 + numTags*12;
-		if (pLastIFD1 - _pApp1 >= app1Size) {
-			return;
-		}
-		_plastIFD1 = pLastIFD1;
-
-		// check if thumbnail is JPEG compressed or not
-		uint8* pTagCompression = FindTag(_pIFD1, pLastIFD1, EXIF::TAG_COMPRESSION, littleEndian);
-		if (pTagCompression == NULL) {
-			return;
-		}
-
-		// according to EXIF spec, if the value of Compression tag is 6, then the thumbnail is JPEG compressed, 
-		// otherwise it is uncompressed (TIFF)
-		if (ReadShortTag(pTagCompression, littleEndian) == 6) {
-			// compressed
-			uint8* pTagOffsetSOI = FindTag(_pIFD1, pLastIFD1, EXIF::TAG_JPEG_INTERCHANGE, littleEndian);
-			uint8* pTagJPEGLen = FindTag(_pIFD1, pLastIFD1, EXIF::TAG_JPEG_INTERCHANGE_LEN, littleEndian);
-			if (pTagOffsetSOI != NULL && pTagJPEGLen != NULL) {
-				uint32 offsetSOI = ReadLongTag(pTagOffsetSOI, littleEndian);
-				uint32 jpegBytes = ReadLongTag(pTagJPEGLen, littleEndian);
-				uint8* pSOI = pTIFFHeader + offsetSOI;
-				uint8* pSOF = (uint8*) Helpers::FindJPEGMarker(pSOI, jpegBytes, 0xC0);
-				if (pSOF != NULL) {
-					_thumbWidth = pSOF[7]*256 + pSOF[8];
-					_thumbHeight = pSOF[5]*256 + pSOF[6];
-					_jpegThumbStreamLength = jpegBytes;
-					_hasJpegCompressedThumbnail = true;
-				}
-			}
-		} else {
-			// uncompressed
-			uint8* pTagThumbWidth = FindTag(_pIFD1, pLastIFD1, EXIF::TAG_IMAGE_WIDTH, littleEndian);
-			uint8* pTagThumbHeight = FindTag(_pIFD1, pLastIFD1, EXIF::TAG_IMAGE_HEIGHT, littleEndian);
-			if (pTagThumbWidth != NULL && pTagThumbHeight != NULL) {
-				_thumbWidth = ReadShortOrLongTag(pTagThumbWidth, littleEndian);
-				_thumbHeight = ReadShortOrLongTag(pTagThumbHeight, littleEndian);
-			}
-		}
-	}
+	populateFromImageMeta(imageMeta);
 }
 
-CEXIFReader::CEXIFReader(LPCWSTR imagePath)
+CEXIFReader::CEXIFReader(LPCTSTR imagePath)
 	: _exposureTime{ 0, 0 },
 	_dateTaken{ 0 },
 	_dateLastModified{ 0 }
 {
-	_thumbWidth = -1;
-	_thumbHeight = -1;
+	assert(imagePath != NULL);
+	size_t  imagePathLen = _tcslen(imagePath);
+	assert(imagePathLen > 0);
 
 	// new implementation gets EXIF metadata using Exiv2 library
 	// Exiv2 library returns more accurate values for some tags (e.g. focal length, lens name, etc)
 	// with new approach zhe code will also become more simple to maintain in future
-	Exiv2Parser::imageMetadata imageMeta = Exiv2Parser::getExifMetadata(imagePath);
+	Exiv2Parser::imageMetadata imageMeta = Exiv2Parser::GetImageMeta(imagePath);
 
-	TransferImageMeta(imageMeta);
+	populateFromImageMeta(imageMeta);
 }
 
 CEXIFReader::~CEXIFReader(void) {
@@ -322,28 +331,35 @@ CEXIFReader::~CEXIFReader(void) {
 }
 
 void CEXIFReader::WriteImageOrientation(int orientation) {
-	if (_pTagOrientation != NULL) {
-		WriteShortTag(_pTagOrientation, orientation, _littleEndian);
+	if (_imageFormat == IF_JXL || _imageFormat == IF_HEIF || _imageFormat == IF_AVIF) {
+		// orientation tag must be ignored for JXL and HEIF/AVIF
+		return;
+	}
+	uint8* pTagOrientation = FindTag(_pFirstEntryIFD0, _pEndIFD0, EXIF::TAG_ORIENTATION, _littleEndian);
+	if (pTagOrientation != NULL) {
+		WriteShortTag(pTagOrientation, orientation, _littleEndian);
 	}
 }
 
 void CEXIFReader::DeleteThumbnail() {
-	if (_pLastIFD0 != NULL) {
-		*_pLastIFD0 = 0;
+	// _pEndIFD0 points to 4-byte offset to next IFD (in our case IFD1 that holds thumbnail)
+	// setting to zero means this is last IFD and so IFD1 with the thumbnail will not be found
+	if (_pEndIFD0 != NULL) {
+		std::memset(_pEndIFD0, 0, 4);
 	}
 }
 
-void CEXIFReader::UpdateJPEGThumbnail(unsigned char* pJPEGStream, int streamLen, int exifBlockLenCorrection, CSize sizeThumb) {
-	if (!_hasJpegCompressedThumbnail) {
+void CEXIFReader::UpdateJPEGThumbnail(unsigned char* pJpegStream, int streamLen, int exifBlockLenCorrection, CSize sizeThumb) {
+	if (!_thumbJpegEncoded) {
 		return;
 	}
-	uint8* pTagOffsetSOI = FindTag(_pIFD1, _plastIFD1, EXIF::TAG_JPEG_INTERCHANGE, _littleEndian);
+	uint8* pTagOffsetSOI = FindTag(_pFirstEntryIFD1, _pEndIFD1, EXIF::TAG_JPEG_INTERCHANGE, _littleEndian);
 	uint32 nOffsetSOI = ReadLongTag(pTagOffsetSOI, _littleEndian);
 	uint8* pTIFFHeader = _pApp1 + 10;
 	uint8* pSOI = pTIFFHeader + nOffsetSOI;
-	memcpy(pSOI + 2, pJPEGStream, streamLen);
+	memcpy(pSOI + 2, pJpegStream, streamLen);
 
-	uint8* pTagJPEGBytes = FindTag(_pIFD1, _plastIFD1, EXIF::TAG_JPEG_INTERCHANGE_LEN, _littleEndian);
+	uint8* pTagJPEGBytes = FindTag(_pFirstEntryIFD1, _pEndIFD1, EXIF::TAG_JPEG_INTERCHANGE_LEN, _littleEndian);
 	WriteLongTag(pTagJPEGBytes, streamLen + 2, _littleEndian);
 	int newApp1Size = _pApp1[2]*256 + _pApp1[3] + exifBlockLenCorrection;
 	_pApp1[2] = newApp1Size >> 8;
@@ -357,7 +373,7 @@ double CEXIFReader::CalcFocalLengthEquiv(double focalLength) {
 bool CEXIFReader::HasLensInfo() {
 	bool isEmpty = true;
 	for (int i = 0; i < 4; i++) {
-		if (!m_LensInfo[i].IsEmpty()) {
+		if (!m_LensInfo[i].IsZeroOrEmpty()) {
 			return true;
 		}
 	}
@@ -383,7 +399,7 @@ CString CEXIFReader::GetLensInfo() {
 	}
 
 	CString fNumberRange;
-	if (m_LensInfo[2].IsEmpty() && m_LensInfo[3].IsEmpty()) {
+	if (m_LensInfo[2].IsZeroOrEmpty() && m_LensInfo[3].IsZero()) {
 		fNumberRange = _T("");
 	}
 	else {
@@ -402,12 +418,9 @@ CString CEXIFReader::GetLensInfo() {
 	return focalRange + fNumberRange;
 }
 
-// tranfer data from DTO to member variables of this class, so that the existing code can use it without change
-void CEXIFReader::TransferImageMeta(Exiv2Parser::imageMetadata& imageMeta)
+// copy data from image metadata to member variables of this class, so that the existing code can use it without change
+void CEXIFReader::populateFromImageMeta(Exiv2Parser::imageMetadata& imageMeta)
 {
-	// get indication for byte order of the EXIF data (true=little endian, false=big endian)
-	_littleEndian = imageMeta.littleEndian;
-
 	// get camera make
 	_make = imageMeta.make.c_str();
 	// return only the well known brand, for example "Olympus Imaging Corporation" is simplified to "Olympus"
@@ -429,18 +442,21 @@ void CEXIFReader::TransferImageMeta(Exiv2Parser::imageMetadata& imageMeta)
 	// get software used to create the image
 	_software = imageMeta.software.c_str();
 
+	// get rating
+	_rating = imageMeta.rating;
+
 	// get date taken and last modified date
 	tmToSystemTime(imageMeta.dateTaken, _dateTaken);
 	tmToSystemTime(imageMeta.dateModified, _dateLastModified);
 
 	// get basic exposure info
 	_exposureTime = Rational(imageMeta.exposureTime);
-	_exposureBias = Exiv2Parser::convertRationalToDouble(imageMeta.exposureBias);
+	_exposureBias = Exiv2Parser::ConvertRationalToDouble(imageMeta.exposureBias);
 	_aperture = imageMeta.aperture;
 	_isoSpeed = imageMeta.isoSpeed;
 	_flashFired = imageMeta.flashFired;
-	m_WhiteBalanceMode = imageMeta.whiteBalance;
-	_imageOrientation = (uint8)imageMeta.orientation;
+	_whiteBalanceMode = imageMeta.whiteBalance;
+	_orientation = (uint8)imageMeta.orientation;
 
 	// get lens related info
 	_focalLength = imageMeta.focalLength;
@@ -460,4 +476,11 @@ void CEXIFReader::TransferImageMeta(Exiv2Parser::imageMetadata& imageMeta)
 		_longitude = new GPSCoordinate(imageMeta.gps.longitude);
 		_altitude = imageMeta.gps.altitude;
 	}
+
+	// get thumbnail metadata info
+	_hasThumb = imageMeta.hasThumb;
+	_thumbJpegEncoded = imageMeta.thumbJpegEncoded;
+	_thumbWidth = imageMeta.thumbWidth;
+	_thumbHeight = imageMeta.thumbHeight;
+	_thumbSizeInBytes = imageMeta.thumbSizeInBytes;
 }

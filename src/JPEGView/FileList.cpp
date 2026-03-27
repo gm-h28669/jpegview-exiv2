@@ -167,7 +167,7 @@ static void ParseAndAddFileEndings(LPCTSTR sEndings) {
 				sCurrent++;
 			}
 			if (_tcslen(sStart) > 2) {
-				std::string extension = StringHelpers::WideToUtf8(sStart + 2);
+				std::string extension = StringHelpers::toUTF8(sStart + 2);
 				auto res = uniqueExtensions.insert(extension);
 				if (res.second) {
 				   sFileEndings[nNumEndings++] = sStart + 2;
@@ -186,7 +186,7 @@ static LPCTSTR* GetSupportedFileEndingList() {
 		uniqueExtensions.clear();
 		for (nNumEndings = 0; nNumEndings < cnNumEndingsInternal; nNumEndings++) {
 			sFileEndings[nNumEndings] = csFileEndingsInternal[nNumEndings];
-			uniqueExtensions.insert(std::string(StringHelpers::WideToUtf8(csFileEndingsInternal[nNumEndings])));
+			uniqueExtensions.insert(std::string(StringHelpers::toUTF8(csFileEndingsInternal[nNumEndings])));
 		}
 
 		LPCTSTR sFileEndingsWIC = CSettingsProvider::This().FilesProcessedByWIC();
