@@ -51,7 +51,7 @@ namespace Exiv2Parser {
         uint32_t exposureMode = 0;
         double aperture = 0.0;
         uint32_t isoSpeed = 0;
-        uint32_t whiteBalance = 0;
+        std::string whiteBalance;
         bool flashFired = false;
         uint32_t rating = 0;
 

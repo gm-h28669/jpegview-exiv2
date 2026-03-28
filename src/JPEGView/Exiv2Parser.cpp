@@ -120,7 +120,7 @@ namespace Exiv2Parser {
         // get white balance mode
         iter = Exiv2::whiteBalance(exif);
         if (IS_VALID_EXIF_TAG(iter, exif)) {
-            imageMeta.whiteBalance = iter->value().toUint32();
+            imageMeta.whiteBalance = iter->print();
         }
 
         // get flash fired

@@ -331,6 +331,12 @@ void CEXIFDisplayCtl::FillEXIFDataDisplay() {
 					_exifDisplay->AddLine(CNLS::GetString(_T("Focal length (mm):")), exifReader->GetFocalLength(), 1);
 				}
 
+				// extra exposure information
+				if (exifReader->HasWhiteBalanceMode()) {
+					_exifDisplay->AddLine(CNLS::GetString(_T("White Balance Mode:")), exifReader->GetWhiteBalanceMode());
+				}
+
+				// lens related information
 				if (exifReader->HasFocalLength()) {
 					double focalLengthEquivalent = GetFocalLenghtEquiv(exifReader);
 					if (focalLengthEquivalent > 0.0) {

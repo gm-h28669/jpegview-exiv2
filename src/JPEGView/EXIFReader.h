@@ -141,7 +141,11 @@ public:
 	// aperture value (F-Number)
 	bool HasApertureValue() { return _aperture > 0.0; }
 	double GetApertureValue() { return _aperture; }
-
+	
+	// white balance mode
+	bool HasWhiteBalanceMode() { return !_whiteBalanceMode.IsEmpty(); }
+	LPCTSTR GetWhiteBalanceMode() { return _whiteBalanceMode; }
+	
 	// ISO speed value
 	bool HasISOSpeed() { return _isoSpeed > 0; }
 	int GetISOSpeed() { return _isoSpeed; }
@@ -204,11 +208,11 @@ private:
 	void populateFromImageMeta(Exiv2Parser::imageMetadata& imageMeta);
 	IFDBounds resolveIFD(uint32 offset, uint8* pTiff, size_t app1Size, const char* errMsg);
 
-	CString _make = _T("");
-	CString _model = _T("");
-	CString _userComment = _T("");
-	CString _description = _T("");
-	CString _software = _T("");
+	CString _make;
+	CString _model;
+	CString _userComment;
+	CString _description;
+	CString _software;
 	uint32_t _rating = 0;
 
 	SYSTEMTIME _dateTaken = {};
@@ -219,10 +223,10 @@ private:
 	double _aperture = 0.0;
 	uint32_t _isoSpeed = 0;
 	bool _flashFired = false;
-	uint32_t _whiteBalanceMode = 0;
+	CString _whiteBalanceMode;
 	uint32_t _orientation = 0;
 
-	CString _lensName = _T("");
+	CString _lensName;
 	Rational m_LensInfo[4]; 
 	double _focalLength = 0.0;
 	double _focalLengthEquivalent = 0.0;

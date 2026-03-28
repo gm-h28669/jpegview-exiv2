@@ -455,7 +455,7 @@ void CEXIFReader::populateFromImageMeta(Exiv2Parser::imageMetadata& imageMeta)
 	_aperture = imageMeta.aperture;
 	_isoSpeed = imageMeta.isoSpeed;
 	_flashFired = imageMeta.flashFired;
-	_whiteBalanceMode = imageMeta.whiteBalance;
+	_whiteBalanceMode = imageMeta.whiteBalance.c_str();
 	_orientation = (uint8)imageMeta.orientation;
 
 	// get lens related info
