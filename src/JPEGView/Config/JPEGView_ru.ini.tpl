@@ -471,6 +471,10 @@ ShowJPEGComments=true
 ; в панели с информацией о файле.
 ShowHistogram=false
 
+; TODO: needs translation
+; Set to true to show the image information in a compact format (default is to show one piece of information per line)
+ShowCompactEXIF=true
+
 ; URL-адрес поставщика геоданных для отображения GPS-координат на карте
 ; OpenStreetMap: www.openstreetmap.org/?mlat={lat}&mlon={lng}&zoom=15
 ; Google Карты: https://www.google.com/maps/search/?api=1&query={lat},{lng}

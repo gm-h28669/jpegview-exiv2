@@ -116,6 +116,7 @@ CSettingsProvider::CSettingsProvider(void) {
 	m_bShowFullPathInTitle = GetBool(_T("ShowFilePathInTitle"), false);
 	m_bShowHistogram = GetBool(_T("ShowHistogram"), false);
 	m_bShowJPEGComments = GetBool(_T("ShowJPEGComments"), true);
+	m_bShowCompactEXIF = GetBool(_T("ShowCompactEXIF"), false);
 	m_bShowBottomPanel = GetBool(_T("ShowBottomPanel"), true);
 	m_bShowZoomNavigator = GetBool(_T("ShowZoomNavigator"), true);
 	m_fBlendFactorNavPanel = (float)GetDouble(_T("BlendFactorNavPanel"), 0.5, 0.0, 1.0);

@@ -405,6 +405,9 @@ ShowJPEGComments=true
 ; Set to true to show the histogram on the file info panel by default
 ShowHistogram=false
 
+; Set to true to show the image information in a compact format (default is to show one piece of information per line)
+ShowCompactEXIF=true
+
 ; URL for the map provider to display GPS coordinates on a map (only shown when EXIF has GPS coordinates)
 ; OpenStreetmap: www.openstreetmap.org/?mlat={lat}&mlon={lng}&zoom=15
 ; Google maps: https://www.google.com/maps/search/?api=1&query={lat},{lng}

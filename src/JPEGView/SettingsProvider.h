@@ -36,6 +36,7 @@ public:
 	bool ShowFullPathInTitle() { return m_bShowFullPathInTitle; }
 	bool ShowHistogram() { return m_bShowHistogram; }
 	bool ShowJPEGComments() { return m_bShowJPEGComments; }
+	bool ShowCompactEXIF() { return m_bShowCompactEXIF; }
 	bool ShowNavPanel() { return m_bShowNavPanel; }
 	bool ShowBottomPanel() { return m_bShowBottomPanel; }
 	bool ShowZoomNavigator() { return m_bShowZoomNavigator; }
@@ -206,6 +207,7 @@ private:
 	bool m_bShowFileInfo;
 	bool m_bShowEXIFDateInTitle;
 	bool m_bShowFullPathInTitle;
+	bool m_bShowCompactEXIF;
 	bool m_bShowHistogram;
 	bool m_bShowJPEGComments;
 	bool m_bShowNavPanel;
