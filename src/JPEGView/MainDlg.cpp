@@ -454,6 +454,11 @@ LRESULT CMainDlg::OnPaint(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, B
 	}
 
 	CPaintDC dc(m_hWnd);
+
+	// fix: apply color profile of monitor
+	SetICMMode(dc, ICM_ON);
+	// end fix: apply color profile of monitor
+
 	m_dRealizedZoom = 1.0;
 
 	this->GetClientRect(&m_clientRect);

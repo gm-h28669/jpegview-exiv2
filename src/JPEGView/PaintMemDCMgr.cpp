@@ -3,6 +3,7 @@
 #include "EXIFDisplay.h"
 #include "SettingsProvider.h"
 #include "PaintMemDCMgr.h"
+#include "HelpersICM.h"
 
 CPaintMemDCMgr::CPaintMemDCMgr(CPaintDC& paintDC) : m_paintDC(paintDC) {
 	m_nNumElems = 0;
@@ -138,7 +139,13 @@ void CPaintMemDCMgr::BlitImageToMemDC(void* pDIBData, BITMAPINFO* pBitmapInfo, C
 }
 
 void CPaintMemDCMgr::PaintMemDCToScreen() {
+	HelpersICM::ShowIcmInfo(m_paintDC, _T("m_paintDC"));
+	
 	for (int i = 0; i < m_nNumElems; i++) {
+		CString msg;
+		msg.Format(_T("m_managedRegions[%d]"), i); 
+		HelpersICM::ShowIcmInfo(m_paintDC, msg);
+
 		CRect rect = m_managedRegions[i].DisplayRect;
 		// Paint panel into memory DC
 		if (!m_managedRegions[i].Blend) {
