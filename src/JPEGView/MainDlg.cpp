@@ -53,6 +53,7 @@
 #include "DirectoryWatcher.h"
 #include "DesktopWallpaper.h"
 #include "PrintImage.h"
+#include "Logging.h"
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Constants
@@ -463,7 +464,7 @@ LRESULT CMainDlg::OnPaint(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, B
 
 #ifdef DEBUG
 	CString a; a.Format(_T("client rect w/h pix: %d %d = %d\n"), m_clientRect.Width(), m_clientRect.Height(), m_clientRect.Width() * m_clientRect.Height());
-	//::OutputDebugString(a);
+	//LOG_INFO_WIDE(a);
 #endif
 
 	std::list<CRect> excludedClippingRects;
@@ -2662,7 +2663,7 @@ bool CMainDlg::PerformZoom(double dValue, bool bExponent, bool bZoomToMouse, boo
 
 #ifdef DEBUG
 	CString a; a.Format(_T("dZoom dOldZoom: %f %f\n"), m_dZoom, dOldZoom);
-	::OutputDebugString(a);
+	LOG_INFO_WIDE(a);
 #endif
 
 	// because we've increased/decreased to the maximum zoom allowed,

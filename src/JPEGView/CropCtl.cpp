@@ -13,6 +13,7 @@
 #include "NLS.h"
 #include "FileList.h"
 #include <math.h>
+#include "Logging.h"
 
 // for VS, __cplusplus is always 199711L, must read _MSVC_LANG instead https://learn.microsoft.com/en-us/cpp/preprocessor/predefined-macros?view=msvc-170
 #if _MSVC_LANG >= 201703L  // C++17 and above
@@ -374,7 +375,8 @@ void CCropCtl::TrackCroppingRect(int nX, int nY, Handle eHandle) {
 		m_startTrackMousePos.x - m_cropStart.x, m_startTrackMousePos.y - m_cropStart.y,
 		m_cropStart.x, m_cropStart.y,
 		m_cropEnd.x, m_cropEnd.y,
-		m_cropEnd.x - m_cropStart.x, m_cropEnd.y - m_cropStart.y); ::OutputDebugString(a);
+		m_cropEnd.x - m_cropStart.x, m_cropEnd.y - m_cropStart.y); 
+	LOG_INFO_WIDE(a);
 #endif
 
 	switch (eHandle) {

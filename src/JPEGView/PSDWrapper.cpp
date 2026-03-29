@@ -49,6 +49,7 @@
 #include "TJPEGWrapper.h"
 #include "ICCProfileTransform.h"
 #include "SettingsProvider.h"
+#include "Logging.h"
 
 
 #define PSD_HEADER_SIZE 26
@@ -379,7 +380,7 @@ CJPEGImage* PsdReader::ReadImage(LPCTSTR strFileName, bool& bOutOfMemory)
 					if (p != pOffset) {
 						WCHAR buf[100];
 						swprintf(buf, _T("Misaligned scan line bytes (%+d) for channel %d row %d\n"), p - pOffset, channel, row);
-						::OutputDebugString(buf);
+						LOG_WARNING_WIDE(buf);
 					}
 #endif
 				}
