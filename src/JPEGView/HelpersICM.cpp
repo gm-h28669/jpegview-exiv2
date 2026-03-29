@@ -19,10 +19,12 @@ namespace HelpersICM {
 	}
 
 	void ShowIcmInfo(HDC hdc, const CString msg) {
+#ifdef DEBUG
 		int status = SetICMMode(hdc, ICM_QUERY);
 		CString icmMode = (status == ICM_OFF) ? TEXT("off") : TEXT("on");
 		CString icmProfilePath = GetIccProfilePath(hdc);
 		LOG_INFO_WIDE(msg + TEXT(": Color management: ") + icmMode + TEXT(". Profile: ") + icmProfilePath);
+#endif
 	}
 
 	CString GetCurrentMonitorDeviceName(HWND hWnd) {
