@@ -1,37 +1,61 @@
 ******************************************************************************
 *****************************   Installation   *******************************
 ******************************************************************************
-1. Choose between 32 bit and 64 version
-JPEGView is provided in a 32 bit version and a 64 bit version. If you are using the 64 bit edition of Windows 7, 8 or 10, it is recommended to use the 64 bit version, in all other cases or when in doubt use the 32 bit version. With the 64 bit version, you can load images with more than 100 MegaPixels.
 
-2. Check operation system requirements
-JPEGView32:
- Windows XP SP2 or SP3 (it does NOT work with SP1 only)
- Windows XP 64 bit SP2
- Windows Vista SP2
- Windows 7
- Windows 8/8.1
- Windows 10
-JPEGView64:
- Windows 7 64 bit edition
- Windows 8/8.1 64 bit edition
- Windows 10 64 bit edition
- (not supported: Windows XP 64 bit)
+SYSTEM REQUIREMENTS
+- 64-bit Windows 7 or later (64-bit version only)
 
-3. Extract directory
-JPEGView can be installed by simply extracting the directory with the chosen version to an arbitrary location on your hard disk, e.g.:
-For the 32 bit version: JPEGView_X.Y.Z.zip\JPEGView32\  --> C:\Program Files (x86)\JPEGView32\
-For the 64 bit version: JPEGView_X.Y.Z.zip\JPEGView64\  --> C:\Program Files\JPEGView64\
+BUILD OUTPUTS
+
+The build process generates the following outputs:
+
+Executable Files:
+  Debug:   .\src\JPEGView\bin\x64\Debug
+  Release: .\src\JPEGView\bin\x64\Release
+
+Installer (.msi):
+  Debug:   .\src\JPEGView.Setup\bin\x64\Debug\en-us
+  Release: .\src\JPEGView.Setup\bin\x64\Release\en-us
+
+Note: In the paths above, "." denotes the root directory of your cloned JPEGView repository.
+
+INSTALLATION METHODS
+
+Option 1: Using MSI Installer
+
+1. Run the MSI installer (Debug or Release version)
+2. Follow the installer instructions
+3. The installer will:
+   - Create a Start Menu entry
+   - Register JPEGView as default viewer for supported image types
+     (jpg, gif, tif, bmp, etc.)
+
+You can change these settings later via:
+Right-click > Settings/Admin > Set as default viewer...
+
+Option 2: Portable Installation
+
+1. Copy the contents of either:
+   .\src\JPEGView\bin\x64\Debug
+   or
+   .\src\JPEGView\bin\x64\Release
+   to your desired location
+
+2. Run JPEGView.exe
+
 
 ******************************************************************************
 *****************************   Uninstallation   *****************************
 ******************************************************************************
-To remove JPEGView, just delete the folder JPEGView32 respectively JPEGView64 from your hard disk.
 
-In case you have set JPEGView as default viewer for some file types, you should restore the old default viewer:
-JPEGView context menu > Settings/Admin > Set as default viewer...
-Uncheck all file types and press 'OK'.
-Windows 8 and later: You need to choose another default program for the associated file types: Go to the control panel, choose Programs > Default Programs > Set Default Programs, select another viewer (e.g. the built in Photo Viewer) in the list on the left and finally click 'Set this program as default' on the right.
+Portable Installation:
+  Delete the folder where you copied the files.
+
+MSI Installer:
+  1. Open Settings > Apps > Installed Apps
+  2. Select JPEGView from the list
+  3. Click Uninstall
+
 
 ******************************************************************************
 ******************************   Why JPEGView ? ******************************

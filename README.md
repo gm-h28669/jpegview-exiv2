@@ -4,7 +4,24 @@
 
 # JPEGView - Image Viewer and Editor
 
-This is the official re-release of JPEGView.
+This is a fork of David Kleiner's excellent and feature-rich JPEGView.
+
+### New Features
+
+- **Exiv2 Integration**: Uses the Exiv2 library to extract EXIF/XMP metadata from all image file types (JPG, RAW, etc.)
+- **Compact EXIF Display**: View EXIF data in a streamlined format by setting `ShowCompactEXIF=true` in your JPEGViewer.ini file
+
+### Bug Fixes
+
+- **ICC Profile Support**: Enabled ICM for monitor color management, ensuring colors are rendered according to your Windows ICC profile configuration
+- **Display Bug Resolution**: Fixed an issue where images were displayed twice in certain scenarios (see GitHub issue #147)
+
+### Build Notes
+
+- Solution migrated to Visual Studio 2022
+- 32-bit build configurations removed
+- Exiv2 library (v0.28.3.1) is automatically downloaded from NuGet during the build process
+
 
 ## Description
 
@@ -44,78 +61,31 @@ Basic on-the-fly image processing is provided - allowing adjusting typical param
 * Basic image processing tools can be applied realtime during viewing
 * Movie/Slideshow mode - to play folder of JPEGs as movie
 
-# Installation
+### Installation
 
-## Official Releases
+This fork does not provide pre-built installers or distributions. To use it, you must build from source.
+See [COMPILING.txt](https://github.com/gm-h28669/jpegview-exiv2/blob/master/COMPILING.txt) for details.
 
-Official releases will be made to [sylikc's GitHub Releases](https://github.com/sylikc/jpegview/releases) page.  Each release includes:
+The build process generates the following outputs:
 
-* **Archive Zip/7z** - Portable
-* **Windows Installer MSI** - For Installs
-* **Source code** - Build it yourself
+**Executable Files**
+- **Debug build**: `.\src\JPEGView\bin\x64\Debug`
+- **Release build**: `.\src\JPEGView\bin\x64\Release`
 
-## Portable
+**Installer (.msi)**
+- **Debug build**: `.\src\JPEGView.Setup\bin\x64\Debug\en-us`
+- **Release build**: `.\src\JPEGView.Setup\bin\x64\Release\en-us`
 
-JPEGView _does not require installation_ to run.  Just **unzip, and run** either the 64-bit version, or the 32-bit version depending on which platform you're on.  It can save the settings to the extracted folder and run entirely portable.
+See [HowToInstall.txt](https://github.com/gm-h28669/jpegview-exiv2/blob/master/HowToInstall.txt) for details on how to install/uninstall JPEGView after building.
 
-## MSI Installer
+### System Requirements
 
-For those who prefer to have JPEGView installed for All Users, a 32-bit/64-bit installer is available to download starting with v1.0.40.
-
-(Unfortunately, I don't own a code signing certificate yet, so the MSI release is not signed.  Please verify checksums!)
-
-### WinGet
-
-If you're on Windows 11, or Windows 10 (build 1709 or later), you can also download it directly from the official [Microsoft WinGet tool](https://docs.microsoft.com/en-us/windows/package-manager/winget/) repository.  This downloads the latest MSI installer directly from GitHub for installation.
-
-Example Usage:
-
-C:\> `winget search jpegview`
-```
-Name     Id              Version  Source
------------------------------------------
-JPEGView sylikc.JPEGView 1.1.43  winget
-```
-
-C:\> `winget install jpegview`
-```
-Found JPEGView [sylikc.JPEGView] Version 1.1.43
-This application is licensed to you by its owner.
-Microsoft is not responsible for, nor does it grant any licenses to, third-party packages.
-Downloading https://github.com/sylikc/jpegview/releases/download/v1.1.43/JPEGView64_en-us_1.1.43.msi
-  ██████████████████████████████  4.23 MB / 4.23 MB
-Successfully verified installer hash
-Starting package install...
-Successfully installed
-```
-
-## PortableApps
-
-Another option is to use the official [JPEGView on PortableApps](https://portableapps.com/apps/graphics_pictures/jpegview_portable) package.  The PortableApps launcher preserves user settings in a separate directory from the extracted application directory.  This release is signed.
-
-## Scoop
-
-[Scoop](https://scoop.sh/) is a Windows command-line installer and manager for portable applications.
-
-To install with Scoop, run the following commands:
-
-```shell
-scoop bucket add extras
-scoop install extras/jpegview-fork
-```
-
-After installation, the configuration file is located at `%UserProfile%\scoop\persist\JPEGView-fork\JPEGView.ini`.
-
-## System Requirements
-
-* 64-bit version: Windows 7/8/10/11 64-bit or later
-* 32-bit version: Windows 7 or later
-  * A special _32-bit Windows XP SP2_ build is available, which supports most formats (except for formats added after v1.0.37.1, ex. Animated PNG, JXL, HEIC).  Other features and options are the same as the normal builds.
+- **Operating System**: Windows 7, 8, 10, or 11 (64-bit)
+- **Architecture**: 64-bit only (32-bit not supported in this fork, mainly because nowadays CPUs are 64 bit)
 
 ## What's New
 
-* See what has changed in the [latest releases](https://github.com/sylikc/jpegview/releases)
-* Or Check the [CHANGELOG.txt](https://github.com/sylikc/jpegview/blob/master/CHANGELOG.txt) to review new features in detail.
+Check the [CHANGELOG.txt](https://github.com/gm-h28669/jpegview-exiv2/blob/master/README.md) to review new features in detail.
 
 # Localization
 
@@ -182,4 +152,4 @@ Special thanks to [qbnu](https://github.com/qbnu) for adding additional codec su
 * LibRaw support (all updated RAW formats, such as CR3)
 * Photoshop PSD support
 
-Thanks to all the _translators_ which keep JPEGView strings up-to-date in different languages!  See [CHANGELOG.txt](https://github.com/sylikc/jpegview/blob/master/CHANGELOG.txt) to find credits for translators at each release!
+Thanks to all the _translators_ which keep JPEGView strings up-to-date in different languages!  See [CHANGELOG.txt](https://github.com/gm-h28669/jpegview-exiv2/blob/master/CHANGELOG.txt) to find credits for translators at each release!
