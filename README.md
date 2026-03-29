@@ -14,7 +14,7 @@ This is a fork of David Kleiner's excellent and feature-rich JPEGView.
 ### Bug Fixes
 
 - **ICC Profile Support**: Enabled ICM for monitor color management, ensuring colors are rendered according to your Windows ICC profile configuration
-- **Display Bug Resolution**: Fixed an issue where images were displayed twice in certain scenarios (see GitHub issue #147)
+- **Display Bug Resolution**: Fixed an issue where images were displayed twice in certain scenarios (see [issue #147](https://github.com/sylikc/jpegview/issues/147))
 
 ### Build Notes
 
