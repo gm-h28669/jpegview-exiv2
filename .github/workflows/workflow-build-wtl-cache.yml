@@ -40,7 +40,11 @@ jobs:
     - name: Restore NuGet Packages
       run: nuget restore "src/JPEGView.sln" -Verbosity detailed -Force
       shell: cmd
-    
+ 
+    - name: Show content of packages folder (after NuGet restore)
+      run: dir /s /a "D:\a\jpegview-exiv2\jpegview-exiv2\src\packages"
+      shell: cmd
+     
     - uses: ./.github/actions/setup-wix
 
     - uses: ./.github/actions/wtl-cache
