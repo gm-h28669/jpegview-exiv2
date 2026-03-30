@@ -49,7 +49,7 @@ jobs:
       run: |
         echo === Extracting NuGet package ===
         cd "D:\a\jpegview-exiv2\jpegview-exiv2\src\packages\StoneSteps.Expat.VS2022.Static.2.6.3.1"
-        powershell -Command "Expand-Archive -Path 'StoneSteps.Expat.VS2022.Static.2.6.3.1.nupkg' -DestinationPath 'extracted' -Force"
+        powershell -Command "powershell -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('StoneSteps.Expat.VS2022.Static.2.6.3.1.nupkg', 'extracted')"
         echo.
         echo === All files in extracted package ===
         dir /s /b extracted
