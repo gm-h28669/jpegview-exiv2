@@ -14,16 +14,12 @@
 *.su
 *.idb
 *.pdb
-
 *.pch
-
 *.tlog
-
 *.dll
 *.ilk
 *.exp
 *.exe
-
 *.user
 
 # Visual C++ cache files
@@ -36,3 +32,6 @@ ipch/
 *.cachefile
 *.VC.db
 *.VC.VC.opendb
+
+# ignore NuGet packages that have been installed through NuGet package manager
+src/packages/
