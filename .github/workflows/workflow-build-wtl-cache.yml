@@ -37,6 +37,10 @@ jobs:
         vs-version: '[17.0,18.0)'
         msbuild-architecture: ${{ inputs.platform-arch }}
 
+    - name: Clean NuGet cache
+      run: nuget locals all -clear
+      shell: cmd
+
     - name: Restore NuGet Packages
       run: nuget restore "src/JPEGView.sln" -Verbosity detailed -Force
       shell: cmd
