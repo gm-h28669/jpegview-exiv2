@@ -30,7 +30,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: setup-msbuild (VS 2022)
+    - name: Setup MSBuild (VS2022)
       # https://github.com/marketplace/actions/setup-msbuild
       uses: microsoft/setup-msbuild@v1.1
       with:
@@ -38,7 +38,7 @@ jobs:
         msbuild-architecture: ${{ inputs.platform-arch }}
 
     - name: Restore NuGet Packages
-      run: nuget restore "src/JPEGView.sln" -Verbosity detailed
+      run: nuget restore "src/JPEGView.sln" -Verbosity detailed -Force
       shell: cmd
     
     - uses: ./.github/actions/setup-wix
