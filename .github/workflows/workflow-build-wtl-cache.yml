@@ -38,7 +38,7 @@ jobs:
         msbuild-architecture: ${{ inputs.platform-arch }}
 
     - name: Restore NuGet Packages
-      run: nuget restore "src/JPEGViewer.sln" -Verbosity detailed
+      run: nuget restore "src/JPEGView.sln" -Verbosity detailed
       shell: cmd
     
     - uses: ./.github/actions/setup-wix
