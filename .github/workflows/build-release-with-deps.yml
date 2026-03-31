@@ -7,10 +7,10 @@ on:
   # run this action when kicked off manually
   workflow_dispatch:
   # when a tag or branch created
-  create:
+  # create:
   # published releases get checked
-  release:
-    types: [published]
+  # release:
+  #   types: [published]
 
 jobs:
   call-workflow-build-x64:
