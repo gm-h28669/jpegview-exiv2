@@ -5,7 +5,7 @@
 [![OS Support](https://img.shields.io/badge/Windows-10%20%7C%2011-blue)](#) 
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue)](https://github.com/gm-h28669/jpegview-exiv2/blob/master/LICENSE.txt)
 [![Latest GitHub Release](https://img.shields.io/github/v/release/gm-h28669/jpegview-exiv2?label=GitHub&style=social)](https://github.com/gm-h28669/jpegview-exiv2/releases)
-[![Downloads](https://badgen.net/github/assets-dl/gm-h28669/jpegview-exiv2?cache=3600&color=grey&label=)](#) 
+[![Downloads](https://badgen.net/github/assets-dl/gm-h28669/jpegview-exiv2?cache=3600&color=grey&label=)](https://github.com/gm-h28669/jpegview-exiv2/releases/latest)
 
 # JPEGView - Image Viewer and Editor
 
@@ -68,7 +68,7 @@ Basic on-the-fly image processing is provided - allowing adjusting typical param
 
 ### Installation
 
-This fork provides [pre-built distributions](https://github.com/gm-h28669/jpegview-exiv2/releases/). T
+This fork provides [pre-built distributions](https://github.com/gm-h28669/jpegview-exiv2/releases/).
 
 Alternatively you can build from source: see [COMPILING.txt](https://github.com/gm-h28669/jpegview-exiv2/blob/master/COMPILING.txt) for details.
 
