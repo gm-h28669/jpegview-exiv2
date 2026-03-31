@@ -1,6 +1,11 @@
-[![Documentation](https://img.shields.io/badge/Docs-Outdated-yellowgreen)](https://htmlpreview.github.io/?https://github.com/sylikc/jpegview/blob/master/src/JPEGView/Config/readme.html) [![Localization Progress](https://img.shields.io/badge/Localized-91%25-blueviolet)](#Localization) [![Build x64](https://github.com/sylikc/jpegview/actions/workflows/build-release-x64.yml/badge.svg?branch=master)](https://github.com/sylikc/jpegview/actions/workflows/build-release-x64.yml) [![OS Support](https://img.shields.io/badge/Windows-XP%20%7C%207%20%7C%208%20%7C%2010%20%7C%2011-blue)](#) [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue)](https://github.com/sylikc/jpegview/blob/master/LICENSE.txt)
-
-[![Latest GitHub Release](https://img.shields.io/github/v/release/sylikc/jpegview?label=GitHub&style=social)](https://github.com/sylikc/jpegview/releases)[![Downloads](https://badgen.net/github/assets-dl/sylikc/jpegview?cache=3600&color=grey&label=)](#) [![WinGet](https://repology.org/badge/version-for-repo/winget/jpegview.svg?allow_ignored=1&header=WinGet)](https://winstall.app/apps/sylikc.JPEGView) [![PortableApps](https://img.shields.io/badge/PortableApps-Current-green)](https://portableapps.com/apps/graphics_pictures/jpegview_portable) [![Scoop](https://repology.org/badge/version-for-repo/scoop/jpegview-fork.svg?header=Scoop)](https://scoop.sh/#/apps?q=%22jpegview-fork%22) [![Chocolatey](https://img.shields.io/chocolatey/v/jpegview)](https://community.chocolatey.org/packages/jpegview) [![Npackd](https://repology.org/badge/version-for-repo/npackd_stable/jpegview.svg?allow_ignored=1&header=Npackd)](https://www.npackd.org/p/jpegview)
+[![Documentation](https://img.shields.io/badge/Docs-Outdated-yellowgreen)](https://htmlpreview.github.io/?https://github.com/gm-h28669/jpegview-exiv2/blob/master/src/JPEGView/Config/readme.html) 
+[![Localization Progress](https://img.shields.io/badge/Localized-91%25-blueviolet)](#Localization) 
+[![Build x64](https://github.com/gm-h28669/jpegview-exiv2/actions/workflows/build-release-x64.yml/badge.svg?branch=master)](https://github.com/gm-h28669/jpegview-exiv2/actions/workflows/build-release-x64.yml) 
+[![Build x64](https://github.com/gm-h28669/jpegview-exiv2/actions/workflows/build-debug-x64.yml/badge.svg?branch=master)](https://github.com/gm-h28669/jpegview-exiv2/actions/workflows/build-debug-x64.yml) 
+[![OS Support](https://img.shields.io/badge/Windows-10%20%7C%2011-blue)](#) 
+[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue)](https://github.com/gm-h28669/jpegview-exiv2/blob/master/LICENSE.txt)
+[![Latest GitHub Release](https://img.shields.io/github/v/release/gm-h28669/jpegview-exiv2?label=GitHub&style=social)](https://github.com/gm-h28669/jpegview-exiv2/releases)
+[![Downloads](https://badgen.net/github/assets-dl/gm-h28669/jpegview-exiv2?cache=3600&color=grey&label=)](#) 
 
 # JPEGView - Image Viewer and Editor
 
@@ -63,8 +68,9 @@ Basic on-the-fly image processing is provided - allowing adjusting typical param
 
 ### Installation
 
-This fork does not provide pre-built installers or distributions. To use it, you must build from source.
-See [COMPILING.txt](https://github.com/gm-h28669/jpegview-exiv2/blob/master/COMPILING.txt) for details.
+This fork provides [pre-built distributions](https://github.com/gm-h28669/jpegview-exiv2/releases/). T
+
+Alternatively you can build from source: see [COMPILING.txt](https://github.com/gm-h28669/jpegview-exiv2/blob/master/COMPILING.txt) for details.
 
 The build process generates the following outputs:
 
@@ -80,7 +86,7 @@ See [HowToInstall.txt](https://github.com/gm-h28669/jpegview-exiv2/blob/master/H
 
 ### System Requirements
 
-- **Operating System**: Windows 7, 8, 10, or 11 (64-bit)
+- **Operating System**: Windows 10, or 11 (64-bit)
 - **Architecture**: 64-bit only (32-bit not supported in this fork, mainly because nowadays CPUs are 64 bit)
 
 ## What's New

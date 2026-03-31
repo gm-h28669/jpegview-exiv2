@@ -1,15 +1,41 @@
 ******************************************************************************
-*****************************   Installation   *******************************
+AVAILABLE DOWNLOADS
+******************************************************************************
+
+Download and unzip one of the build assets (release or debug version) from the GitHub 
+release page: https://github.com/gm-h28669/jpegview-exiv2/releases
+Get the latest release (tagged "Latest")
+
+ZIP files:
+- For the 64 bit/Release version: JPEGView-GH-h28669-Release-x64-<commit id>.zip  --> C:\Program Files\JPEGView64\
+- For the 64 bit/Debug version:   JPEGView-GH-h28669-Debug-x64-<commit id>.zip  --> C:\Program Files\JPEGView64\
+
+Once unzipped you will find 
+
+For a debug build:
+- JPEGView\bin\x64\Release: portable installation, contains all required files to run JPEGView (release version)
+- JPEGView.Setup\bin\x64\Release\en-us: MSI installer for the release version
+
+For a release build:
+- JPEGView\bin\x64\Debug: portable installation, contains all required files to run JPEGView (debug version)
+- JPEGView.Setup\bin\x64\Debug\en-us: MSI installer for the debug version
+
+
+******************************************************************************
+INSTALLATION
 ******************************************************************************
 
 SYSTEM REQUIREMENTS
-- 64-bit Windows 7 or later (64-bit version only)
+
+64-bit Windows 10 or later (64-bit version only)
+
+
 
 BUILD OUTPUTS
 
 The build process generates the following outputs:
 
-Executable Files:
+Portable installation:
   Debug:   .\src\JPEGView\bin\x64\Debug
   Release: .\src\JPEGView\bin\x64\Release
 
@@ -18,6 +44,7 @@ Installer (.msi):
   Release: .\src\JPEGView.Setup\bin\x64\Release\en-us
 
 Note: In the paths above, "." denotes the root directory of your cloned JPEGView repository.
+
 
 INSTALLATION METHODS
 
@@ -30,22 +57,14 @@ Option 1: Using MSI Installer
    - Register JPEGView as default viewer for supported image types
      (jpg, gif, tif, bmp, etc.)
 
-You can change these settings later via:
-Right-click > Settings/Admin > Set as default viewer...
 
 Option 2: Portable Installation
 
-1. Copy the contents of either:
-   .\src\JPEGView\bin\x64\Debug
-   or
-   .\src\JPEGView\bin\x64\Release
-   to your desired location
-
-2. Run JPEGView.exe
+1. Copy the contents of the files required for the portable installation to any location you like. 
 
 
 ******************************************************************************
-*****************************   Uninstallation   *****************************
+UNINSTALLATION
 ******************************************************************************
 
 Portable Installation:
@@ -58,8 +77,9 @@ MSI Installer:
 
 
 ******************************************************************************
-******************************   Why JPEGView ? ******************************
+WHY JPEGView ?
 ******************************************************************************
+
 1. Yet another image viewer...
 Compared to many other image viewers, JPEGView has a rather different philosophy: Minimal GUI - maximal image.
 Therefore your first impression after having started JPEGView is probably disappointing - a 'file open' dialog allows choosing an image that is then shown - nothing else seems to be there. If you have been searching for an image viewer with classic menu, tool bar, side bar, status bar and browsing panel you should probably continue with the section 'Uninstallation' and use IrfanView or XnView instead.
@@ -67,9 +87,11 @@ Therefore your first impression after having started JPEGView is probably disapp
 2. Still here?
 If you want to try out a different approach with minimal GUI but nevertheless lots of functionality behind that minimal GUI, you may give a try to JPEGView. Be assured that there is more to discover!
 
+
 ******************************************************************************
-******************************   First steps   *******************************
+FIRST STEPS
 ******************************************************************************
+
 1. Start JPEGView and choose an image that is larger than your primary screen
 This makes JPEGView displaying the image in full screen mode what is better suited for this tutorial. You can toggle between full screen mode and window mode with the F11 key at any time.
 
@@ -98,21 +120,21 @@ The context menu of JPEGView appears, providing access to most functionality of 
 
 9. That's it for the first steps. Terminate JPEGView with the 'Esc' key.
 
+
+
 ******************************************************************************
-*************************   Set as default viewer   **************************
+SET AS DEFAULT VIEWER
 ******************************************************************************
+
 Because JPEGView has no built in image browser, it's optimal usage scenario is to browse images with the Windows Explorer and start JPEGView by double clicking an image in the Explorer. You can then go through the images in the folder in JPEGView using the arrow keys or the navigation panel buttons. To enable this use case, JPEGView needs to be registered as default program for the image types it supports (i.e. jpg, gif, tif, bmp, etc).
 
 1. Start JPEGView, load an image and open the context menu (right mouse click).
 Choose: Settings/Admin > Set as default viewer...
 Select the file types to be opened by JPEGView and press 'OK'.
 
-2. Starting with Windows 8, Microsoft made it harder and harder to change the default application for the standard image types.
-Therefore, the steps described above are not sufficient and some addional manual work is required.
-Windows 8 and 8.1: The 'default programs' dialog from the Control Panel is shown automatically to confirm the associations.
-Windows 10: Windows 10 only shows a message box where to set the 'standard apps'. To actually do so:
- - Open the Windows 10 start menu and type 'standard apps'. Click the found settings page.
- - On the right panel, scroll to the end and select 'Set defaults by app'
- - In the dialog that is appearing, choose 'JPEGView' in the list on the left panel
- - Now you can assign all (or a subset) of the image file types to JPEGView
-
+2. To change the default application for the standard image types some addional manual work is required.
+Windows 10/11:
+- Select Settings/Apps/Default Apps
+- Click on 'Choose defaults by file type'
+- In the dialog that is appearing, select desired file type and associate it with JPEGView
+- You need to repeat this for all file types you want to be opened by JPEGView
