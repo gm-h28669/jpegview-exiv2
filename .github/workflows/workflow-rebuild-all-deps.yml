@@ -22,6 +22,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    - name: Install Visual C++ Build Tools
+      run: choco install visualcppbuildtools
+
     - name: Checkout code with all Submodules
       uses: actions/checkout@v3
       with:
