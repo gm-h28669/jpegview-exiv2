@@ -45,9 +45,9 @@ jobs:
       run: nuget restore "src/JPEGView.sln" -Verbosity detailed -Force
       shell: cmd
  
-    - name: Show content of packages folder (after NuGet restore)
-      run: dir /s /a "D:\a\jpegview-exiv2\jpegview-exiv2\src\packages"
-      shell: cmd
+    # - name: Show content of packages folder (after NuGet restore)
+    #   run: dir /s /a "D:\a\jpegview-exiv2\jpegview-exiv2\src\packages"
+    #   shell: cmd
 
     # - name: Extract and list NuGet package contents
     #   run: |
